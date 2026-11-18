@@ -4,9 +4,9 @@ import {
   db, dayKey, addDays, diffDays, getMeta, setMeta, toggleHabit, levelFor,
   exportAll, importAll, resetAll, PROGRAM_DAYS, type Habit,
 } from './db'
-import { AISettings, CoachCard, Reflect } from './AIPanel'
+import { AISettings, CoachCard, Reflect, useAIModel, modelLabel } from './AIPanel'
 import { Talk } from './Talk'
-import { Confetti, Ring, Toaster, toast, RemindersSettings } from './ui'
+import { Confetti, Ring, Toaster, toast, RemindersSettings, fmt12 } from './ui'
 import { DEFAULT_REMINDER, startReminders, type Reminder } from './reminders'
 
 const GOALS: Record<string, { label: string; emoji: string; habits: [string, string][] }> = {
@@ -32,23 +32,25 @@ type Tab = 'today' | 'progress' | 'journal' | 'talk' | 'settings'
 export default function App() {
   const start = useLiveQuery(() => getMeta<string | null>('startDate', null), [], undefined)
   const [tab, setTab] = useState<Tab>('today')
+  const [page, setPage] = useState<SettingsPage>('home')
+  const openSettings = (p: SettingsPage) => { setPage(p); setTab('settings') }
   const today = useToday()
   useEffect(() => { startReminders() }, [])
-  useEffect(() => { window.scrollTo(0, 0) }, [tab])
+  useEffect(() => { window.scrollTo(0, 0) }, [tab, page])
   if (start === undefined) return null
   if (!start) return <Onboarding />
   return (
     <div className="mx-auto max-w-md min-h-dvh pb-24">
-      {tab === 'today' && <Today start={start} today={today} goSettings={() => setTab('settings')} />}
+      {tab === 'today' && <Today start={start} today={today} openSettings={openSettings} />}
       {tab === 'progress' && <Progress start={start} today={today} />}
       {tab === 'journal' && <JournalView today={today} goTalk={() => setTab('talk')} />}
-      {tab === 'talk' && <Talk goSettings={() => setTab('settings')} />}
-      {tab === 'settings' && <Settings />}
+      {tab === 'talk' && <Talk goSettings={() => openSettings('ai')} />}
+      {tab === 'settings' && <Settings page={page} setPage={setPage} onAIDone={w => setTab(w)} />}
       <Toaster />
       <nav className="fixed bottom-0 inset-x-0 bg-[#0b0f19]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto max-w-md grid grid-cols-5">
           {([['today', '✅', 'Today'], ['progress', '📈', 'Progress'], ['journal', '📓', 'Journal'], ['talk', '💬', 'Talk'], ['settings', '⚙️', 'Settings']] as const).map(([k, i, l]) => (
-            <button key={k} onClick={() => setTab(k)} className={`py-3 flex flex-col items-center text-xs ${tab === k ? 'text-orange-400' : 'text-gray-500'}`}>
+            <button key={k} onClick={() => { if (k === 'settings') setPage('home'); setTab(k) }} className={`py-3 flex flex-col items-center text-xs ${tab === k ? 'text-orange-400' : 'text-gray-500'}`}>
               <span className="text-xl leading-none mb-1">{i}</span>{l}
             </button>
           ))}
@@ -160,7 +162,7 @@ const greeting = () => {
   return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
-function Today({ start, today, goSettings }: { start: string; today: string; goSettings: () => void }) {
+function Today({ start, today, openSettings }: { start: string; today: string; openSettings: (p: SettingsPage) => void }) {
   const { habits, byDate, xp, streak, day } = useStats(start, today)
   const name = useLiveQuery(() => getMeta('name', ''), []) ?? ''
   const reminder = useLiveQuery(() => getMeta<Reminder>('reminder', DEFAULT_REMINDER), [])
@@ -201,7 +203,7 @@ function Today({ start, today, goSettings }: { start: string; today: string; goS
         </Ring>
       </div>
 
-      <CoachCard today={today} goSettings={goSettings}
+      <CoachCard today={today} goSettings={() => openSettings('ai')}
         context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Time of day: ${greeting().toLowerCase()}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
 
       {showNudgeBanner && (
@@ -230,7 +232,7 @@ function Today({ start, today, goSettings }: { start: string; today: string; goS
             </button>
           )
         })}
-        {!habits.length && <button onClick={goSettings} className="w-full rounded-2xl p-4 border border-dashed border-white/20 text-gray-400 text-sm">No active quests. Tap to add some.</button>}
+        {!habits.length && <button onClick={() => openSettings('quests')} className="w-full rounded-2xl p-4 border border-dashed border-white/20 text-gray-400 text-sm">No active quests. Tap to add some.</button>}
       </div>
       {perfect && (
         <div className="mt-4 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 text-center font-semibold">🎉 Perfect day! Streak protected.</div>
@@ -348,65 +350,162 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
 }
 
 /* ---------- Settings ---------- */
-function Settings() {
+type SettingsPage = 'home' | 'profile' | 'quests' | 'reminders' | 'ai' | 'data'
+
+function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p: SettingsPage) => void; onAIDone: (where: 'today' | 'talk') => void }) {
+  const name = useLiveQuery(() => getMeta('name', ''), []) ?? ''
+  const habits = useLiveQuery(() => db.habits.toArray(), []) ?? []
+  const reminder = useLiveQuery(() => getMeta<Reminder>('reminder', DEFAULT_REMINDER), [])
+  const aiModel = useAIModel()
+  const active = habits.filter(h => h.active).length
+
+  if (page !== 'home') {
+    const titles: Record<Exclude<SettingsPage, 'home'>, string> = {
+      profile: 'Profile', quests: 'Quests', reminders: 'Reminders', ai: 'AI coach', data: 'Backup & data',
+    }
+    return (
+      <div className="px-5 pt-4">
+        <button onClick={() => setPage('home')} className="flex items-center gap-1 text-orange-400 text-sm py-2 -ml-1 mb-1">
+          <span className="text-lg leading-none">‹</span> Settings
+        </button>
+        <h1 className="text-2xl font-extrabold mb-5">{titles[page]}</h1>
+        {page === 'profile' && <ProfilePage />}
+        {page === 'quests' && <QuestsPage />}
+        {page === 'reminders' && <RemindersSettings />}
+        {page === 'ai' && <AISettings onDone={onAIDone} />}
+        {page === 'data' && <DataPage />}
+      </div>
+    )
+  }
+
+  const Item = ({ icon, color, title, value, to }: { icon: string; color: string; title: string; value?: string; to: SettingsPage }) => (
+    <button onClick={() => setPage(to)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-white/5">
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base ${color}`}>{icon}</span>
+      <span className="flex-1 font-medium">{title}</span>
+      {value && <span className="text-sm text-gray-400 truncate max-w-[45%]">{value}</span>}
+      <span className="text-gray-600 text-lg leading-none">›</span>
+    </button>
+  )
+  const Group = ({ label, children }: { label?: string; children: React.ReactNode }) => (
+    <div className="mb-6">
+      {label && <div className="text-xs uppercase tracking-wide text-gray-500 mb-2 px-1">{label}</div>}
+      <div className="rounded-2xl bg-white/5 border border-white/10 divide-y divide-white/5 overflow-hidden">{children}</div>
+    </div>
+  )
+
+  return (
+    <div className="px-5 pt-6">
+      <h1 className="text-2xl font-extrabold mb-5">Settings</h1>
+
+      {!aiModel && (
+        <button onClick={() => setPage('ai')} className="w-full text-left mb-6 rounded-2xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400">
+          <div className="rounded-2xl bg-[#141827] p-4 flex items-center gap-3">
+            <span className="text-2xl">🤖</span>
+            <span className="flex-1"><span className="font-bold block">Set up your AI coach</span><span className="text-xs text-gray-400">Private, on-device, about 2 minutes</span></span>
+            <span className="text-gray-500 text-lg">›</span>
+          </div>
+        </button>
+      )}
+
+      <Group label="You">
+        <Item icon="👤" color="bg-blue-500/20" title="Profile" value={name || 'Add your name'} to="profile" />
+        <Item icon="✅" color="bg-green-500/20" title="Quests" value={`${active} active`} to="quests" />
+      </Group>
+      <Group label="Help & motivation">
+        <Item icon="⏰" color="bg-orange-500/20" title="Reminders" value={reminder?.enabled ? fmt12(reminder.time) : 'Off'} to="reminders" />
+        <Item icon="🤖" color="bg-purple-500/20" title="AI coach" value={aiModel ? modelLabel(aiModel) : 'Off'} to="ai" />
+      </Group>
+      <Group label="Your data">
+        <Item icon="💾" color="bg-gray-500/20" title="Backup & data" to="data" />
+      </Group>
+
+      <p className="text-center text-xs text-gray-600 mt-2">Life Reset · private · works offline<br />All your data stays on this device.</p>
+      <InstallHint />
+    </div>
+  )
+}
+
+function ProfilePage() {
+  const name = useLiveQuery(() => getMeta('name', ''), [])
+  const [val, setVal] = useState<string | null>(null)
+  if (name === undefined) return null
+  const v = val ?? name
+  return (
+    <div>
+      <label className="text-sm text-gray-400 block mb-2">Your name</label>
+      <input value={v} onChange={e => setVal(e.target.value)} placeholder="What should we call you?"
+        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-orange-400" />
+      <button disabled={v.trim() === name} onClick={async () => { await setMeta('name', v.trim()); setVal(null); toast('Saved ✓') }}
+        className="w-full mt-3 bg-orange-500 disabled:opacity-40 rounded-xl py-3 font-bold">Save</button>
+    </div>
+  )
+}
+
+function QuestsPage() {
   const habits = useLiveQuery(() => db.habits.orderBy('order').toArray(), []) ?? []
   const [emoji, setEmoji] = useState('⭐')
   const [name, setName] = useState('')
   const add = async () => {
     if (!name.trim()) return
     await db.habits.add({ name: name.trim(), emoji: emoji || '⭐', xp: 10, active: 1, order: habits.length })
-    setName('')
+    setName(''); toast('Quest added ✓')
   }
+  const upd = (h: Habit, p: Partial<Habit>) => db.habits.update(h.id!, p)
+  return (
+    <div>
+      <p className="text-sm text-gray-400 mb-4">Small daily actions you want to make automatic. Tap a name to rename it. Paused quests don’t count toward your streak.</p>
+      <div className="space-y-2 mb-6">
+        {habits.map(h => (
+          <div key={h.id} className={`rounded-2xl bg-white/5 border border-white/10 p-3 ${h.active ? '' : 'opacity-50'}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{h.emoji}</span>
+              <input defaultValue={h.name} onBlur={e => e.target.value.trim() && e.target.value !== h.name && upd(h, { name: e.target.value.trim() })}
+                className="flex-1 bg-transparent outline-none min-w-0 font-medium" aria-label="Quest name" />
+            </div>
+            <div className="flex items-center gap-2 mt-2 pl-8">
+              <select value={h.xp} onChange={e => upd(h, { xp: +e.target.value })} className="bg-white/10 rounded-lg text-xs px-2 py-1.5" aria-label="XP">
+                {[5, 10, 20, 30].map(x => <option key={x} value={x}>{x} XP</option>)}
+              </select>
+              <button onClick={() => upd(h, { active: h.active ? 0 : 1 })} className="text-xs px-3 py-1.5 rounded-lg bg-white/10">{h.active ? '⏸ Pause' : '▶ Resume'}</button>
+              <button onClick={() => confirm(`Delete "${h.name}"? Its history is kept.`) && db.habits.delete(h.id!)} className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300">Delete</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="text-sm font-semibold mb-2">Add a quest</div>
+      <div className="flex gap-2">
+        <input value={emoji} onChange={e => setEmoji(e.target.value)} className="w-14 text-center text-xl bg-white/5 border border-white/10 rounded-xl" aria-label="Emoji" />
+        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="e.g. Stretch 5 minutes"
+          className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-3 outline-none focus:border-orange-400" />
+        <button disabled={!name.trim()} onClick={add} className="bg-orange-500 disabled:opacity-40 rounded-xl px-4 font-bold">Add</button>
+      </div>
+    </div>
+  )
+}
+
+function DataPage() {
   const exportFile = async () => {
     const blob = new Blob([JSON.stringify(await exportAll(), null, 2)], { type: 'application/json' })
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `life-reset-${dayKey()}.json` })
     a.click(); URL.revokeObjectURL(a.href)
+    toast('Backup file saved ✓')
   }
   const importFile = async (f?: File) => {
     if (!f) return
-    try { await importAll(JSON.parse(await f.text())); toast('Backup restored ✓') } catch (e) { alert((e as Error).message) }
+    if (!confirm('Restoring replaces everything currently in the app with the backup. Continue?')) return
+    try { await importAll(JSON.parse(await f.text())); toast('Backup restored ✓') } catch (e) { toast((e as Error).message) }
   }
-  const upd = (h: Habit, p: Partial<Habit>) => db.habits.update(h.id!, p)
-
   return (
-    <div className="px-5 pt-6">
-      <h1 className="text-2xl font-extrabold mb-5">Settings</h1>
-      <h2 className="font-bold mb-3">Quests</h2>
-      <div className="space-y-2 mb-3">
-        {habits.map(h => (
-          <div key={h.id} className={`flex items-center gap-2 rounded-2xl bg-white/5 border border-white/10 p-3 ${h.active ? '' : 'opacity-50'}`}>
-            <span className="text-xl">{h.emoji}</span>
-            <input defaultValue={h.name} onBlur={e => upd(h, { name: e.target.value })} className="flex-1 bg-transparent outline-none min-w-0" />
-            <select value={h.xp} onChange={e => upd(h, { xp: +e.target.value })} className="bg-white/10 rounded-lg text-xs px-1 py-1">
-              {[5, 10, 20, 30].map(x => <option key={x} value={x}>{x} XP</option>)}
-            </select>
-            <button onClick={() => upd(h, { active: h.active ? 0 : 1 })} className="text-xs px-2 py-1 rounded-lg bg-white/10">{h.active ? 'Pause' : 'Resume'}</button>
-            <button onClick={() => confirm(`Delete "${h.name}"?`) && db.habits.delete(h.id!)} className="text-xs px-2 py-1 rounded-lg bg-red-500/20 text-red-300">✕</button>
-          </div>
-        ))}
+    <div>
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm text-gray-300 mb-4">
+        🔒 Everything (quests, streaks, journal, chats) is stored only on this device. Nothing is uploaded. If you clear site data or lose the phone, it’s gone, so save a backup now and then.
       </div>
-      <div className="flex gap-2 mb-8">
-        <input value={emoji} onChange={e => setEmoji(e.target.value)} className="w-14 text-center bg-white/5 border border-white/10 rounded-xl" aria-label="Emoji" />
-        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="New quest" className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-3 outline-none focus:border-orange-400" />
-        <button onClick={add} className="bg-orange-500 rounded-xl px-4 font-bold">Add</button>
-      </div>
-
-      <h2 className="font-bold mb-3">⏰ Reminders</h2>
-      <div className="mb-8"><RemindersSettings /></div>
-
-      <h2 className="font-bold mb-1">🤖 On-device AI coach <span className="text-xs font-normal text-gray-400">(optional)</span></h2>
-      <div className="mb-8"><AISettings /></div>
-
-      <h2 className="font-bold mb-1">Your data</h2>
-      <p className="text-sm text-gray-400 mb-3">Everything is stored only on this device (IndexedDB). Export a backup regularly.</p>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <button onClick={exportFile} className="bg-white/10 rounded-xl py-3">Export backup</button>
-        <label className="bg-white/10 rounded-xl py-3 text-center cursor-pointer">Import backup
-          <input type="file" accept="application/json" className="hidden" onChange={e => importFile(e.target.files?.[0])} />
-        </label>
-      </div>
-      <button onClick={() => confirm('Erase all data and start over? This cannot be undone.') && resetAll()} className="w-full bg-red-500/15 text-red-300 rounded-xl py-3 mt-2">Reset everything</button>
-      <p className="text-center text-xs text-gray-600 mt-8">Life Reset · works offline</p>
+      <button onClick={exportFile} className="w-full bg-orange-500 rounded-xl py-3 font-bold mb-2">⬇️ Save backup file</button>
+      <label className="block w-full bg-white/10 rounded-xl py-3 text-center cursor-pointer mb-8">⬆️ Restore from backup
+        <input type="file" accept="application/json" className="hidden" onChange={e => importFile(e.target.files?.[0])} />
+      </label>
+      <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Danger zone</div>
+      <button onClick={() => confirm('Erase all data and start over? This cannot be undone.') && resetAll()} className="w-full bg-red-500/15 text-red-300 rounded-xl py-3">Erase everything and start over</button>
     </div>
   )
 }
