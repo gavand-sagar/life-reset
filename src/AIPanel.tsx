@@ -37,7 +37,7 @@ export function AISettings() {
   const choose = async (base: string) => {
     const id = modelId(base, sys.f16)
     await setMeta('aiModel', id)
-    loadModel(id)
+    loadModel(id).catch(() => {}) // error shown on the card via state
   }
   const remove = async (base: string) => {
     const id = modelId(base, sys.f16)

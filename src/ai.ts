@@ -121,9 +121,23 @@ export async function isCached(id: string) {
 
 const isCorruptCache = (msg: string) => /exceeds shard size|tensor-cache|shard/i.test(msg)
 
-export async function loadModel(id: string) {
+let inflight: { id: string; p: Promise<void> } | null = null
+
+export async function loadModel(id: string): Promise<void> {
   if (state.model === id && state.status === 'ready') return
-  if (state.status === 'loading') return
+  // Share an in-progress load; if a different model is loading, wait for it first.
+  if (inflight) {
+    if (inflight.id === id) return inflight.p
+    await inflight.p
+    if (state.model === id && state.status === 'ready') return
+  }
+  const p = doLoad(id)
+  inflight = { id, p }
+  try { await p } finally { if (inflight?.p === p) inflight = null }
+  if (state.status === 'error') throw new Error(state.error)
+}
+
+async function doLoad(id: string) {
   set({ status: 'loading', model: id, progress: 0, text: 'Starting…', error: undefined })
   navigator.storage?.persist?.().catch(() => {})
   const { CreateWebWorkerMLCEngine, deleteModelAllInfoInCache } = await lib()

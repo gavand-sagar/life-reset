@@ -5,6 +5,7 @@ import {
   exportAll, importAll, resetAll, PROGRAM_DAYS, type Habit,
 } from './db'
 import { AISettings, CoachCard, Reflect } from './AIPanel'
+import { Talk } from './Talk'
 
 const GOALS: Record<string, { label: string; emoji: string; habits: [string, string][] }> = {
   body: { label: 'Fitness', emoji: '💪', habits: [['🏃', 'Move 30 minutes'], ['💧', 'Drink 2L water'], ['🥗', 'Eat a clean meal']] },
@@ -24,7 +25,7 @@ const QUOTES = [
 ]
 const MOODS = ['😞', '😕', '😐', '🙂', '😄']
 
-type Tab = 'today' | 'progress' | 'journal' | 'settings'
+type Tab = 'today' | 'progress' | 'journal' | 'talk' | 'settings'
 
 export default function App() {
   const start = useLiveQuery(() => getMeta<string | null>('startDate', null), [], undefined)
@@ -36,11 +37,12 @@ export default function App() {
     <div className="mx-auto max-w-md min-h-dvh pb-24">
       {tab === 'today' && <Today start={start} today={today} />}
       {tab === 'progress' && <Progress start={start} today={today} />}
-      {tab === 'journal' && <JournalView today={today} />}
+      {tab === 'journal' && <JournalView today={today} goTalk={() => setTab('talk')} />}
+      {tab === 'talk' && <Talk goSettings={() => setTab('settings')} />}
       {tab === 'settings' && <Settings />}
       <nav className="fixed bottom-0 inset-x-0 bg-[#0b0f19]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="mx-auto max-w-md grid grid-cols-4">
-          {([['today', '✅', 'Today'], ['progress', '📈', 'Progress'], ['journal', '📓', 'Journal'], ['settings', '⚙️', 'Settings']] as const).map(([k, i, l]) => (
+        <div className="mx-auto max-w-md grid grid-cols-5">
+          {([['today', '✅', 'Today'], ['progress', '📈', 'Progress'], ['journal', '📓', 'Journal'], ['talk', '💬', 'Talk'], ['settings', '⚙️', 'Settings']] as const).map(([k, i, l]) => (
             <button key={k} onClick={() => setTab(k)} className={`py-3 flex flex-col items-center text-xs ${tab === k ? 'text-orange-400' : 'text-gray-500'}`}>
               <span className="text-xl leading-none mb-1">{i}</span>{l}
             </button>
@@ -233,37 +235,63 @@ const Stat = ({ label, value }: { label: string; value: string }) => (
 )
 
 /* ---------- Journal ---------- */
-function JournalView({ today }: { today: string }) {
-  const entry = useLiveQuery(() => db.journal.get(today), [today])
-  const past = useLiveQuery(() => db.journal.orderBy('date').reverse().limit(30).toArray(), []) ?? []
-  const [text, setText] = useState<string | null>(null)
-  const value = text ?? entry?.text ?? ''
-  const save = (patch: { mood?: number; text?: string }) =>
-    db.journal.put({ date: today, mood: entry?.mood ?? -1, text: value, ...patch, updatedAt: Date.now() })
+function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
+  const entries = useLiveQuery(() => db.entries.orderBy('createdAt').reverse().limit(100).toArray(), []) ?? []
+  const draftKey = 'journal-draft'
+  const [text, setText] = useState(() => { try { return localStorage.getItem(draftKey) ?? '' } catch { return '' } })
+  const [mood, setMood] = useState(-1)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { try { localStorage.setItem(draftKey, text) } catch { /* ignore */ } }, [text])
+
+  const save = async () => {
+    if (!text.trim() && mood < 0) return
+    await db.entries.add({ date: today, createdAt: Date.now(), mood, text: text.trim() })
+    setText(''); setMood(-1); setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+  const fmtDay = (d: string) => d === today ? 'Today' : d === addDays(today, -1) ? 'Yesterday'
+    : new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+  const fmtTime = (t: number) => new Date(t).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const groups = entries.reduce<Record<string, typeof entries>>((g, e) => ((g[e.date] ??= []).push(e), g), {})
 
   return (
     <div className="px-5 pt-6">
       <h1 className="text-2xl font-extrabold mb-5">Journal</h1>
-      <div className="text-sm text-gray-400 mb-2">How do you feel today?</div>
+      <div className="text-sm text-gray-400 mb-2">How do you feel right now?</div>
       <div className="flex justify-between mb-4">
         {MOODS.map((m, i) => (
-          <button key={i} onClick={() => save({ mood: i })} className={`text-3xl rounded-2xl w-14 h-14 ${entry?.mood === i ? 'bg-orange-500/25 ring-2 ring-orange-400' : 'bg-white/5'}`}>{m}</button>
+          <button key={i} onClick={() => setMood(mood === i ? -1 : i)} className={`text-3xl rounded-2xl w-14 h-14 ${mood === i ? 'bg-orange-500/25 ring-2 ring-orange-400' : 'bg-white/5'}`}>{m}</button>
         ))}
       </div>
-      <textarea value={value} onChange={e => setText(e.target.value)} onBlur={() => text !== null && save({ text: value })}
-        placeholder="Wins, struggles, what you learned…" rows={6}
+      {mood >= 0 && mood <= 1 && (
+        <button onClick={goTalk} className="w-full mb-3 rounded-xl py-2.5 text-sm bg-purple-500/20 border border-purple-400/30">💬 Rough day? Talk it out with Buddy</button>
+      )}
+      <textarea value={text} onChange={e => setText(e.target.value)}
+        placeholder="Wins, struggles, what you learned…" rows={5}
         className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-orange-400" />
-      <button onClick={() => save({ text: value })} className="mt-2 w-full bg-orange-500 rounded-xl py-3 font-bold">Save</button>
-      <Reflect text={value} mood={entry && entry.mood >= 0 ? MOODS[entry.mood] : ''} />
-      <h2 className="font-bold mt-8 mb-3">Past entries</h2>
-      <div className="space-y-2">
-        {past.filter(p => p.date !== today && (p.text || p.mood >= 0)).map(p => (
-          <div key={p.date} className="rounded-2xl bg-white/5 border border-white/10 p-4">
-            <div className="text-xs text-gray-400 mb-1">{p.date} {p.mood >= 0 && MOODS[p.mood]}</div>
-            <div className="text-sm whitespace-pre-wrap">{p.text}</div>
+      <button disabled={!text.trim() && mood < 0} onClick={save} className="mt-2 w-full bg-orange-500 disabled:opacity-40 rounded-xl py-3 font-bold">
+        {saved ? '✓ Saved' : 'Save entry'}
+      </button>
+      <Reflect text={text} mood={mood >= 0 ? MOODS[mood] : ''} />
+
+      <h2 className="font-bold mt-8 mb-3">Entries</h2>
+      {!entries.length && <p className="text-sm text-gray-500">No entries yet. Your saved notes will show up here.</p>}
+      {Object.entries(groups).map(([day, list]) => (
+        <div key={day} className="mb-4">
+          <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">{fmtDay(day)}</div>
+          <div className="space-y-2">
+            {list.map(e => (
+              <div key={e.id} className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                  <span>{fmtTime(e.createdAt)} {e.mood >= 0 && <span className="text-base">{MOODS[e.mood]}</span>}</span>
+                  <button onClick={() => confirm('Delete this entry?') && db.entries.delete(e.id!)} className="px-2 text-gray-500" aria-label="Delete entry">✕</button>
+                </div>
+                {e.text && <div className="text-sm whitespace-pre-wrap">{e.text}</div>}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   )
 }
