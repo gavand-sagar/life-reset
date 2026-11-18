@@ -9,6 +9,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // WebLLM runtime (~6 MB) is cached on first AI use, not on install
+        globIgnores: ['**/ai.worker-*.js', '**/lib-*.js'],
+        runtimeCaching: [{
+          urlPattern: /\/assets\/(ai\.worker|lib)-.*\.js$/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'webllm-runtime', expiration: { maxEntries: 6 } },
+        }],
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'],
       manifest: {
         name: 'Life Reset — 66 Days',
@@ -27,4 +36,5 @@ export default defineConfig({
       },
     }),
   ],
+  worker: { format: 'es' },
 })

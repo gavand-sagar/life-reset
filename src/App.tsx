@@ -4,6 +4,7 @@ import {
   db, dayKey, addDays, diffDays, getMeta, setMeta, toggleHabit, levelFor,
   exportAll, importAll, resetAll, PROGRAM_DAYS, type Habit,
 } from './db'
+import { AISettings, CoachCard, Reflect } from './AIPanel'
 
 const GOALS: Record<string, { label: string; emoji: string; habits: [string, string][] }> = {
   body: { label: 'Fitness', emoji: '💪', habits: [['🏃', 'Move 30 minutes'], ['💧', 'Drink 2L water'], ['🥗', 'Eat a clean meal']] },
@@ -170,7 +171,7 @@ function Today({ start, today }: { start: string; today: string }) {
 
       <div className="flex justify-between items-baseline mb-3">
         <h2 className="font-bold text-lg">Today’s quests</h2>
-        <span className="text-sm text-gray-400">{done.size > habits.length ? habits.length : habits.filter(h => done.has(h.id!)).length}/{habits.length}</span>
+        <span className="text-sm text-gray-400">{habits.filter(h => done.has(h.id!)).length}/{habits.length}</span>
       </div>
       <div className="space-y-2">
         {habits.map(h => {
@@ -190,6 +191,7 @@ function Today({ start, today }: { start: string; today: string }) {
       {habits.length > 0 && habits.every(h => done.has(h.id!)) && (
         <div className="mt-5 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 text-center font-semibold">🎉 Perfect day! Streak protected.</div>
       )}
+      <CoachCard context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
       <InstallHint />
     </div>
   )
@@ -252,6 +254,7 @@ function JournalView({ today }: { today: string }) {
         placeholder="Wins, struggles, what you learned…" rows={6}
         className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-orange-400" />
       <button onClick={() => save({ text: value })} className="mt-2 w-full bg-orange-500 rounded-xl py-3 font-bold">Save</button>
+      <Reflect text={value} mood={entry && entry.mood >= 0 ? MOODS[entry.mood] : ''} />
       <h2 className="font-bold mt-8 mb-3">Past entries</h2>
       <div className="space-y-2">
         {past.filter(p => p.date !== today && (p.text || p.mood >= 0)).map(p => (
@@ -308,6 +311,9 @@ function Settings() {
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="New quest" className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-3 outline-none focus:border-orange-400" />
         <button onClick={add} className="bg-orange-500 rounded-xl px-4 font-bold">Add</button>
       </div>
+
+      <h2 className="font-bold mb-1">🤖 On-device AI coach <span className="text-xs font-normal text-gray-400">(optional)</span></h2>
+      <div className="mb-8"><AISettings /></div>
 
       <h2 className="font-bold mb-1">Your data</h2>
       <p className="text-sm text-gray-400 mb-3">Everything is stored only on this device (IndexedDB). Export a backup regularly.</p>
