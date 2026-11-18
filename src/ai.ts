@@ -183,8 +183,14 @@ export class StuckError extends Error {}
 export async function* chat(messages: ChatCompletionMessageParam[], maxTokens = 220) {
   if (!engine) throw new Error('AI model is not loaded')
   const eng = engine
-  const stream = await eng.chat.completions.create({ messages, stream: true, temperature: 0.7, max_tokens: maxTokens })
-  const it = stream[Symbol.asyncIterator]()
+  let startTimer: ReturnType<typeof setTimeout> | undefined
+  const started = await Promise.race([
+    eng.chat.completions.create({ messages, stream: true, temperature: 0.7, max_tokens: maxTokens }),
+    new Promise<'stuck'>(res => { startTimer = setTimeout(() => res('stuck'), 60000) }),
+  ])
+  clearTimeout(startTimer)
+  if (started === 'stuck') { eng.interruptGenerate(); throw new StuckError('The model stopped responding on this GPU.') }
+  const it = started[Symbol.asyncIterator]()
   let first = true
   for (;;) {
     // Watchdog: some GPUs hang silently. Give up if no token arrives in time.

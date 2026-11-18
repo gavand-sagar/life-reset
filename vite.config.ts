@@ -9,7 +9,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
       workbox: {
+        // reminder notifications + periodic background sync handlers
+        importScripts: ['sw-reminder.js'],
         // WebLLM runtime (~6 MB) is cached on first AI use, not on install
         globIgnores: ['**/ai.worker-*.js', '**/lib-*.js'],
         runtimeCaching: [{

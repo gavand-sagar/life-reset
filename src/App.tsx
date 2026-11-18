@@ -6,6 +6,8 @@ import {
 } from './db'
 import { AISettings, CoachCard, Reflect } from './AIPanel'
 import { Talk } from './Talk'
+import { Confetti, Ring, Toaster, toast, RemindersSettings } from './ui'
+import { DEFAULT_REMINDER, startReminders, type Reminder } from './reminders'
 
 const GOALS: Record<string, { label: string; emoji: string; habits: [string, string][] }> = {
   body: { label: 'Fitness', emoji: '💪', habits: [['🏃', 'Move 30 minutes'], ['💧', 'Drink 2L water'], ['🥗', 'Eat a clean meal']] },
@@ -31,15 +33,18 @@ export default function App() {
   const start = useLiveQuery(() => getMeta<string | null>('startDate', null), [], undefined)
   const [tab, setTab] = useState<Tab>('today')
   const today = useToday()
+  useEffect(() => { startReminders() }, [])
+  useEffect(() => { window.scrollTo(0, 0) }, [tab])
   if (start === undefined) return null
   if (!start) return <Onboarding />
   return (
     <div className="mx-auto max-w-md min-h-dvh pb-24">
-      {tab === 'today' && <Today start={start} today={today} />}
+      {tab === 'today' && <Today start={start} today={today} goSettings={() => setTab('settings')} />}
       {tab === 'progress' && <Progress start={start} today={today} />}
       {tab === 'journal' && <JournalView today={today} goTalk={() => setTab('talk')} />}
       {tab === 'talk' && <Talk goSettings={() => setTab('settings')} />}
       {tab === 'settings' && <Settings />}
+      <Toaster />
       <nav className="fixed bottom-0 inset-x-0 bg-[#0b0f19]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto max-w-md grid grid-cols-5">
           {([['today', '✅', 'Today'], ['progress', '📈', 'Progress'], ['journal', '📓', 'Journal'], ['talk', '💬', 'Talk'], ['settings', '⚙️', 'Settings']] as const).map(([k, i, l]) => (
@@ -140,60 +145,106 @@ function useStats(start: string, today: string) {
 }
 
 /* ---------- Today ---------- */
-function Today({ start, today }: { start: string; today: string }) {
+const MILESTONES: Record<number, string> = {
+  1: 'Day 1. The hardest step is the first one, and you took it.',
+  7: 'One full week! The habit is taking root. 🌱',
+  14: 'Two weeks in. You’re proving it to yourself.',
+  21: 'Day 21. Three weeks of showing up.',
+  30: 'Day 30! Almost halfway. Look how far you’ve come.',
+  45: 'Day 45. The finish line is in sight.',
+  60: 'Six days to go. Finish strong. 💪',
+  66: 'Day 66! You did it. This is who you are now. 🏆',
+}
+const greeting = () => {
+  const h = new Date().getHours()
+  return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
+}
+
+function Today({ start, today, goSettings }: { start: string; today: string; goSettings: () => void }) {
   const { habits, byDate, xp, streak, day } = useStats(start, today)
   const name = useLiveQuery(() => getMeta('name', ''), []) ?? ''
+  const reminder = useLiveQuery(() => getMeta<Reminder>('reminder', DEFAULT_REMINDER), [])
   const done = byDate.get(today) ?? new Set<number>()
   const { lvl, progress, toNext } = levelFor(xp)
   const quote = QUOTES[day % QUOTES.length]
   const pct = Math.min(day, PROGRAM_DAYS) / PROGRAM_DAYS
+  const doneCount = habits.filter(h => done.has(h.id!)).length
+  const perfect = habits.length > 0 && doneCount === habits.length
+  const [boom, setBoom] = useState(0)
+  const milestone = MILESTONES[day]
+
+  const tap = async (h: Habit) => {
+    navigator.vibrate?.(15)
+    const wasLast = !done.has(h.id!) && doneCount === habits.length - 1
+    await toggleHabit(today, h)
+    if (wasLast) { setBoom(Date.now()); navigator.vibrate?.([30, 50, 30]); toast('Perfect day! 🔥 Streak protected') }
+  }
+
+  // In-app reminder: past the reminder time with quests still open.
+  const now = new Date()
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const [rh, rm] = (reminder?.time ?? '20:00').split(':').map(Number)
+  const left = habits.length - doneCount
+  const showNudgeBanner = reminder?.enabled && left > 0 && nowMin >= rh * 60 + rm
 
   return (
     <div className="px-5 pt-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <div className="text-gray-400 text-sm">{name ? `Hey ${name},` : 'Welcome back'}</div>
+      <Confetti fire={boom} />
+      <div className="flex items-center justify-between mb-5 gap-3">
+        <div className="min-w-0">
+          <div className="text-gray-400 text-sm truncate">{greeting()}{name ? `, ${name}` : ''} 👋</div>
           <h1 className="text-2xl font-extrabold">Day {day}{day <= PROGRAM_DAYS && <span className="text-gray-500 font-semibold"> / {PROGRAM_DAYS}</span>}</h1>
+          <div className="text-sm text-orange-400 font-semibold mt-0.5">🔥 {streak} day streak</div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-extrabold text-orange-400">🔥 {streak}</div>
-          <div className="text-xs text-gray-500">day streak</div>
-        </div>
+        <Ring value={habits.length ? doneCount / habits.length : 0} size={68}>
+          {perfect ? '✓' : `${doneCount}/${habits.length}`}
+        </Ring>
       </div>
 
-      <div className="h-2 rounded-full bg-white/10 mb-5 overflow-hidden"><div className="h-full bg-orange-500" style={{ width: `${pct * 100}%` }} /></div>
+      <CoachCard today={today} goSettings={goSettings}
+        context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Time of day: ${greeting().toLowerCase()}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
 
-      <div className="rounded-2xl bg-gradient-to-br from-orange-500/20 to-purple-500/10 border border-white/10 p-4 mb-5">
-        <div className="flex justify-between items-baseline mb-2">
-          <span className="font-bold">Level {lvl}</span><span className="text-xs text-gray-400">{xp} XP · {toNext} to next</span>
+      {showNudgeBanner && (
+        <div className="mb-4 rounded-2xl bg-orange-500/15 border border-orange-400/40 p-3 text-sm">
+          ⏰ {left} quest{left > 1 ? 's' : ''} left today. You’ve got this!
         </div>
-        <div className="h-2 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-purple-400" style={{ width: `${progress * 100}%` }} /></div>
-        <p className="text-sm text-gray-300 mt-3 italic">“{quote}”</p>
-      </div>
+      )}
+      {milestone && (
+        <div className="mb-4 rounded-2xl bg-gradient-to-r from-yellow-500/20 to-orange-500/10 border border-yellow-400/30 p-3 text-sm">🏅 {milestone}</div>
+      )}
 
       <div className="flex justify-between items-baseline mb-3">
         <h2 className="font-bold text-lg">Today’s quests</h2>
-        <span className="text-sm text-gray-400">{habits.filter(h => done.has(h.id!)).length}/{habits.length}</span>
+        <span className="text-xs text-gray-500">Tap to complete</span>
       </div>
       <div className="space-y-2">
         {habits.map(h => {
           const on = done.has(h.id!)
           return (
-            <button key={h.id} onClick={() => { navigator.vibrate?.(15); toggleHabit(today, h) }}
-              className={`w-full flex items-center gap-3 rounded-2xl p-4 border text-left transition ${on ? 'bg-green-500/15 border-green-500/40' : 'bg-white/5 border-white/10'}`}>
+            <button key={h.id} onClick={() => tap(h)}
+              className={`w-full flex items-center gap-3 rounded-2xl p-4 border text-left transition active:scale-[.98] ${on ? 'bg-green-500/15 border-green-500/40' : 'bg-white/5 border-white/10'}`}>
               <span className="text-2xl">{h.emoji}</span>
               <span className={`flex-1 font-medium ${on ? 'line-through text-gray-400' : ''}`}>{h.name}</span>
-              <span className="text-xs text-gray-500">+{h.xp}</span>
-              <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center ${on ? 'bg-green-500 border-green-500' : 'border-gray-600'}`}>{on && '✓'}</span>
+              <span className={`text-xs ${on ? 'text-green-400' : 'text-gray-500'}`}>+{h.xp} XP</span>
+              <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition ${on ? 'bg-green-500 border-green-500 pop' : 'border-gray-600'}`}>{on && '✓'}</span>
             </button>
           )
         })}
-        {!habits.length && <p className="text-gray-500 text-sm">No active quests. Add some in Settings.</p>}
+        {!habits.length && <button onClick={goSettings} className="w-full rounded-2xl p-4 border border-dashed border-white/20 text-gray-400 text-sm">No active quests. Tap to add some.</button>}
       </div>
-      {habits.length > 0 && habits.every(h => done.has(h.id!)) && (
-        <div className="mt-5 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 text-center font-semibold">🎉 Perfect day! Streak protected.</div>
+      {perfect && (
+        <div className="mt-4 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 text-center font-semibold">🎉 Perfect day! Streak protected.</div>
       )}
-      <CoachCard context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
+
+      <div className="mt-6 rounded-2xl bg-white/5 border border-white/10 p-4">
+        <div className="flex justify-between items-baseline mb-2">
+          <span className="font-bold">Level {lvl}</span><span className="text-xs text-gray-400">{xp} XP · {toNext} to next</span>
+        </div>
+        <div className="h-2 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-purple-400 transition-all" style={{ width: `${progress * 100}%` }} /></div>
+        <div className="flex justify-between text-xs text-gray-500 mt-3 mb-1"><span>66-day journey</span><span>{Math.round(pct * 100)}%</span></div>
+        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-orange-500" style={{ width: `${pct * 100}%` }} /></div>
+        <p className="text-sm text-gray-400 mt-3 italic">“{quote}”</p>
+      </div>
       <InstallHint />
     </div>
   )
@@ -246,7 +297,7 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
   const save = async () => {
     if (!text.trim() && mood < 0) return
     await db.entries.add({ date: today, createdAt: Date.now(), mood, text: text.trim() })
-    setText(''); setMood(-1); setSaved(true)
+    setText(''); setMood(-1); setSaved(true); toast('Entry saved ✓')
     setTimeout(() => setSaved(false), 2500)
   }
   const fmtDay = (d: string) => d === today ? 'Today' : d === addDays(today, -1) ? 'Yesterday'
@@ -313,7 +364,7 @@ function Settings() {
   }
   const importFile = async (f?: File) => {
     if (!f) return
-    try { await importAll(JSON.parse(await f.text())); alert('Backup restored.') } catch (e) { alert((e as Error).message) }
+    try { await importAll(JSON.parse(await f.text())); toast('Backup restored ✓') } catch (e) { alert((e as Error).message) }
   }
   const upd = (h: Habit, p: Partial<Habit>) => db.habits.update(h.id!, p)
 
@@ -339,6 +390,9 @@ function Settings() {
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="New quest" className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-xl px-3 py-3 outline-none focus:border-orange-400" />
         <button onClick={add} className="bg-orange-500 rounded-xl px-4 font-bold">Add</button>
       </div>
+
+      <h2 className="font-bold mb-3">⏰ Reminders</h2>
+      <div className="mb-8"><RemindersSettings /></div>
 
       <h2 className="font-bold mb-1">🤖 On-device AI coach <span className="text-xs font-normal text-gray-400">(optional)</span></h2>
       <div className="mb-8"><AISettings /></div>

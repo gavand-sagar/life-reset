@@ -11,7 +11,7 @@
       ]
     },
     {
-      "source": "/sw.js",
+      "source": "/(sw.js|sw-reminder.js)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ]

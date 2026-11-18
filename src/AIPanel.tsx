@@ -126,16 +126,17 @@ function useGenerate() {
   const [out, setOut] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const run = async (prompt: string) => {
+  const run = async (prompt: string, onDone?: (text: string) => void) => {
     if (!chosen) return
     setBusy(true); setOut(''); setErr('')
     try {
       await loadModel(chosen)
       let acc = ''
       for await (const t of chat([{ role: 'system', content: COACH_SYSTEM }, { role: 'user', content: prompt }])) { acc += t; setOut(acc) }
+      if (acc.trim()) onDone?.(acc.trim())
     } catch (e) {
       setErr(e instanceof StuckError
-        ? 'The model got stuck on this GPU. Go to Settings → turn on Compatibility mode, then pick the model again.'
+        ? 'The model got stuck. Close and reopen the app; if it keeps happening, turn on Compatibility mode in Settings or pick a smaller model.'
         : (e as Error).message)
     }
     setBusy(false)
@@ -143,20 +144,53 @@ function useGenerate() {
   return { chosen, ai, out, busy, err, run }
 }
 
-/* ---------- Today: coach nudge ---------- */
-export function CoachCard({ context }: { context: string }) {
+/* ---------- Today: coach nudge (hero card) ---------- */
+export function CoachCard({ context, today, goSettings }: { context: string; today: string; goSettings: () => void }) {
   const g = useGenerate()
-  if (!g.chosen) return null
-  return (
-    <div className="mt-5 rounded-2xl border border-purple-400/30 bg-purple-500/10 p-4">
-      <div className="flex justify-between items-center mb-2">
-        <span className="font-semibold">🤖 AI coach</span>
-        <button disabled={g.busy} onClick={() => g.run(`${context}\n\nGive me one short, specific nudge for today.`)} className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/40 disabled:opacity-40">
-          {g.busy ? (g.ai.status === 'loading' ? `Loading ${Math.round(g.ai.progress * 100)}%` : 'Thinking…') : g.out ? 'Another' : 'Get nudge'}
-        </button>
+  const key = `nudge:${today}`
+  const stored = useLiveQuery(() => getMeta<string>(key, ''), [key])
+  const hidden = useLiveQuery(() => getMeta('coachTeaserHidden', false), [])
+
+  if (g.chosen === undefined || stored === undefined) return null
+  // No model yet: a teaser that explains the feature.
+  if (!g.chosen) {
+    if (hidden) return null
+    return (
+      <div className="relative mb-5 rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400">
+        <div className="rounded-3xl bg-[#141827] p-4">
+          <button onClick={() => setMeta('coachTeaserHidden', true)} className="absolute top-3 right-4 text-gray-500 text-sm" aria-label="Hide">✕</button>
+          <div className="text-xs font-semibold text-fuchsia-300 mb-1">✨ NEW · AI COACH</div>
+          <p className="text-sm text-gray-200 mb-3">Get a personal nudge every day and a friend to talk to on hard days. Runs privately on your phone, even offline.</p>
+          <button onClick={goSettings} className="text-sm px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 font-semibold">Set up AI coach</button>
+        </div>
       </div>
-      {g.out ? <p className="text-sm whitespace-pre-wrap">{g.out}</p> : <p className="text-xs text-gray-400">Runs on your device, offline.</p>}
-      {g.err && <p className="text-xs text-red-300 mt-1">{g.err}</p>}
+    )
+  }
+
+  const text = g.busy || g.out ? g.out : stored
+  const run = () => g.run(`${context}
+
+Give me one short, specific nudge for today. One or two sentences, address me directly.`, t => setMeta(key, t))
+  return (
+    <div className="mb-5 rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400 shadow-[0_0_30px_-8px_rgba(217,70,239,.6)]">
+      <div className="rounded-3xl bg-[#141827] p-4">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-orange-400 flex items-center justify-center text-lg">🤖</div>
+          <div className="flex-1">
+            <div className="font-bold leading-tight">Your coach</div>
+            <div className="text-[11px] text-gray-400">On-device · private</div>
+          </div>
+          <button disabled={g.busy} onClick={run} className="text-xs px-3 py-1.5 rounded-full bg-white/10 disabled:opacity-50">
+            {g.busy ? (g.ai.status === 'loading' ? `Waking ${Math.round(g.ai.progress * 100)}%` : 'Thinking…') : text ? '↻ New' : 'Get nudge'}
+          </button>
+        </div>
+        {text
+          ? <p className="text-[15px] leading-relaxed text-gray-100 whitespace-pre-wrap">{text}{g.busy && <span className="inline-block w-1.5 h-4 align-middle ml-0.5 bg-white/60 animate-pulse" />}</p>
+          : g.busy
+            ? <div className="space-y-2 py-1"><div className="h-3 rounded bg-white/10 animate-pulse w-11/12" /><div className="h-3 rounded bg-white/10 animate-pulse w-2/3" /></div>
+            : <button onClick={run} className="w-full text-left text-sm text-gray-300">Tap for today’s personal nudge →</button>}
+        {g.err && <p className="text-xs text-red-300 mt-2">{g.err}</p>}
+      </div>
     </div>
   )
 }
