@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { BellRing, CalendarPlus } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getMeta } from './db'
 import {
@@ -100,15 +101,15 @@ export function RemindersSettings() {
       {perm === 'denied' && <p className="text-xs text-yellow-300">Notifications are blocked. Allow them in your browser/phone settings for this site.</p>}
       {saved.enabled && perm === 'granted' && (
         <p className="text-xs text-gray-400">
-          {bg ? '✅ Background reminders enabled on this device.' : 'Reminders arrive while the app is open or running in the background. For a guaranteed alarm, add it to your calendar too.'}
+          {bg ? 'Background reminders are on for this device.' : 'Reminders arrive while the app is open or running in the background. For a guaranteed alarm, add it to your calendar too.'}
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-2">
         <button disabled={perm !== 'granted'} onClick={() => showTest().catch(() => toast('Could not show a notification'))}
-          className="text-sm bg-white/10 rounded-xl py-2.5 disabled:opacity-40">Test notification</button>
+          className="text-sm bg-white/10 rounded-xl py-2.5 disabled:opacity-40 flex items-center justify-center gap-1.5"><BellRing size={16} /> Test</button>
         <button onClick={() => { downloadCalendarReminder(saved.time); toast('Open the file to add it to your calendar') }}
-          className="text-sm bg-white/10 rounded-xl py-2.5">📅 Add to calendar</button>
+          className="text-sm bg-white/10 rounded-xl py-2.5 flex items-center justify-center gap-1.5"><CalendarPlus size={16} /> Add to calendar</button>
       </div>
     </div>
   )

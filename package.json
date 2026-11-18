@@ -13,6 +13,7 @@
     "@mlc-ai/web-llm": "^0.2.89",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^1.1.7",
+    "lucide-react": "^0.460.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

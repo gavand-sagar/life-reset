@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Globe, Heart, Lock, SendHorizontal } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from './db'
 import { chat, loadModel, useAI, StuckError } from './ai'
@@ -67,7 +68,7 @@ export function Talk({ goSettings }: { goSettings: () => void }) {
       <div className="px-5 pt-6 pb-3 flex items-center justify-between sticky top-0 bg-[#0b0f19]/95 backdrop-blur z-10">
         <div>
           <h1 className="text-2xl font-extrabold">Talk it out</h1>
-          <div className="text-xs text-gray-500">🔒 Private · on-device · offline</div>
+          <div className="text-xs text-gray-500 flex items-center gap-1"><Lock size={11} /> Private · on-device · offline</div>
         </div>
         {msgs.length > 0 && !busy && <button onClick={() => confirm('Clear this conversation?') && db.chat.clear()} className="text-xs px-3 py-1.5 rounded-lg bg-white/10">New chat</button>}
       </div>
@@ -93,7 +94,7 @@ export function Talk({ goSettings }: { goSettings: () => void }) {
         <textarea value={input} onChange={e => setInput(e.target.value)} rows={1} placeholder="Type how you feel…"
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) } }}
           className="flex-1 resize-none bg-white/5 border border-white/10 rounded-2xl px-4 py-3 outline-none focus:border-purple-400 max-h-32" />
-        <button disabled={busy || !input.trim()} className="rounded-2xl px-4 bg-purple-500 disabled:opacity-40 font-bold">Send</button>
+        <button disabled={busy || !input.trim()} aria-label="Send" className="rounded-2xl w-12 bg-purple-500 disabled:opacity-40 flex items-center justify-center"><SendHorizontal size={20} /></button>
       </form>
     </div>
   )
@@ -113,13 +114,13 @@ function Bubble({ role, text, typing }: { role: 'user' | 'assistant'; text: stri
 function Helplines({ urgent }: { urgent?: boolean }) {
   return (
     <div className={`rounded-2xl p-4 text-sm mt-4 ${urgent ? 'bg-red-500/15 border border-red-400/40' : 'bg-white/5 border border-white/10'}`}>
-      <div className="font-semibold mb-1">{urgent ? '💛 You don’t have to go through this alone' : 'Need to talk to a person?'}</div>
+      <div className="font-semibold mb-1">{urgent ? <span className="inline-flex items-center gap-1.5"><Heart size={16} className="text-pink-300" fill="currentColor" /> You don’t have to go through this alone</span> : 'Need to talk to a person?'}</div>
       <p className="text-gray-300 mb-2">{urgent ? 'If you might act on these thoughts, please reach out to someone right now.' : 'Free, confidential support:'}</p>
       <ul className="space-y-1">
         <li>🇮🇳 Tele-MANAS: <a className="text-orange-300 underline" href="tel:14416">14416</a></li>
         <li>🇮🇳 KIRAN: <a className="text-orange-300 underline" href="tel:18005990019">1800-599-0019</a></li>
         <li>🇺🇸 988 Lifeline: <a className="text-orange-300 underline" href="tel:988">988</a></li>
-        <li>🌍 Others: <a className="text-orange-300 underline" href="https://findahelpline.com" target="_blank" rel="noreferrer">findahelpline.com</a></li>
+        <li className="flex items-center gap-1"><Globe size={14} /> Others: <a className="text-orange-300 underline" href="https://findahelpline.com" target="_blank" rel="noreferrer">findahelpline.com</a></li>
       </ul>
     </div>
   )

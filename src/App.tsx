@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AlarmClock, BarChart3, Bell, BookOpen, CalendarCheck, Check, ChevronLeft, ChevronRight, Download, Flame, HardDrive, ListChecks, Lock, MessageCircle, PartyPopper, Pause, Play, Settings2, Share, Sparkles, Trash2, Trophy, Upload, User, Zap, type LucideIcon } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   db, dayKey, addDays, diffDays, getMeta, setMeta, toggleHabit, levelFor,
@@ -49,9 +50,9 @@ export default function App() {
       <Toaster />
       <nav className="fixed bottom-0 inset-x-0 bg-[#0b0f19]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto max-w-md grid grid-cols-5">
-          {([['today', '✅', 'Today'], ['progress', '📈', 'Progress'], ['journal', '📓', 'Journal'], ['talk', '💬', 'Talk'], ['settings', '⚙️', 'Settings']] as const).map(([k, i, l]) => (
+          {([['today', ListChecks, 'Today'], ['progress', BarChart3, 'Progress'], ['journal', BookOpen, 'Journal'], ['talk', MessageCircle, 'Talk'], ['settings', Settings2, 'Settings']] as const).map(([k, Icon, l]) => (
             <button key={k} onClick={() => { if (k === 'settings') setPage('home'); setTab(k) }} className={`py-3 flex flex-col items-center text-xs ${tab === k ? 'text-orange-400' : 'text-gray-500'}`}>
-              <span className="text-xl leading-none mb-1">{i}</span>{l}
+              <Icon size={22} strokeWidth={tab === k ? 2.4 : 1.8} className="mb-1" />{l}
             </button>
           ))}
         </div>
@@ -86,7 +87,7 @@ function Onboarding() {
   return (
     <div className="mx-auto max-w-md min-h-dvh px-5 py-10 flex flex-col">
       {step === 0 && (<>
-        <div className="text-6xl mb-6">🔥</div>
+        <div className="w-16 h-16 rounded-2xl bg-orange-500/15 flex items-center justify-center mb-6"><Flame size={36} className="text-orange-400" /></div>
         <h1 className="text-3xl font-extrabold mb-3">Reset your life in 66 days</h1>
         <p className="text-gray-400 mb-8">Research suggests a new habit takes about 66 days to become automatic. Pick a few daily quests, earn XP, and protect your streak. Everything stays on this device.</p>
         <label className="text-sm text-gray-400 mb-2">What should we call you?</label>
@@ -149,13 +150,13 @@ function useStats(start: string, today: string) {
 /* ---------- Today ---------- */
 const MILESTONES: Record<number, string> = {
   1: 'Day 1. The hardest step is the first one, and you took it.',
-  7: 'One full week! The habit is taking root. 🌱',
+  7: 'One full week! The habit is taking root.',
   14: 'Two weeks in. You’re proving it to yourself.',
   21: 'Day 21. Three weeks of showing up.',
   30: 'Day 30! Almost halfway. Look how far you’ve come.',
   45: 'Day 45. The finish line is in sight.',
-  60: 'Six days to go. Finish strong. 💪',
-  66: 'Day 66! You did it. This is who you are now. 🏆',
+  60: 'Six days to go. Finish strong.',
+  66: 'Day 66! You did it. This is who you are now.',
 }
 const greeting = () => {
   const h = new Date().getHours()
@@ -179,7 +180,7 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
     navigator.vibrate?.(15)
     const wasLast = !done.has(h.id!) && doneCount === habits.length - 1
     await toggleHabit(today, h)
-    if (wasLast) { setBoom(Date.now()); navigator.vibrate?.([30, 50, 30]); toast('Perfect day! 🔥 Streak protected') }
+    if (wasLast) { setBoom(Date.now()); navigator.vibrate?.([30, 50, 30]); toast('Perfect day! Streak protected') }
   }
 
   // In-app reminder: past the reminder time with quests still open.
@@ -194,12 +195,12 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
       <Confetti fire={boom} />
       <div className="flex items-center justify-between mb-5 gap-3">
         <div className="min-w-0">
-          <div className="text-gray-400 text-sm truncate">{greeting()}{name ? `, ${name}` : ''} 👋</div>
+          <div className="text-gray-400 text-sm truncate">{greeting()}{name ? `, ${name}` : ''}</div>
           <h1 className="text-2xl font-extrabold">Day {day}{day <= PROGRAM_DAYS && <span className="text-gray-500 font-semibold"> / {PROGRAM_DAYS}</span>}</h1>
-          <div className="text-sm text-orange-400 font-semibold mt-0.5">🔥 {streak} day streak</div>
+          <div className="text-sm text-orange-400 font-semibold mt-0.5 flex items-center gap-1"><Flame size={15} /> {streak} day streak</div>
         </div>
         <Ring value={habits.length ? doneCount / habits.length : 0} size={68}>
-          {perfect ? '✓' : `${doneCount}/${habits.length}`}
+          {perfect ? <Check size={26} strokeWidth={3} className="text-green-400" /> : `${doneCount}/${habits.length}`}
         </Ring>
       </div>
 
@@ -207,12 +208,12 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
         context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Time of day: ${greeting().toLowerCase()}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
 
       {showNudgeBanner && (
-        <div className="mb-4 rounded-2xl bg-orange-500/15 border border-orange-400/40 p-3 text-sm">
-          ⏰ {left} quest{left > 1 ? 's' : ''} left today. You’ve got this!
+        <div className="mb-4 rounded-2xl bg-orange-500/15 border border-orange-400/40 p-3 text-sm flex items-center gap-2">
+          <AlarmClock size={18} className="text-orange-300 shrink-0" />{left} quest{left > 1 ? 's' : ''} left today. You’ve got this!
         </div>
       )}
       {milestone && (
-        <div className="mb-4 rounded-2xl bg-gradient-to-r from-yellow-500/20 to-orange-500/10 border border-yellow-400/30 p-3 text-sm">🏅 {milestone}</div>
+        <div className="mb-4 rounded-2xl bg-gradient-to-r from-yellow-500/20 to-orange-500/10 border border-yellow-400/30 p-3 text-sm flex items-center gap-2"><Trophy size={18} className="text-yellow-300 shrink-0" />{milestone}</div>
       )}
 
       <div className="flex justify-between items-baseline mb-3">
@@ -228,14 +229,14 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
               <span className="text-2xl">{h.emoji}</span>
               <span className={`flex-1 font-medium ${on ? 'line-through text-gray-400' : ''}`}>{h.name}</span>
               <span className={`text-xs ${on ? 'text-green-400' : 'text-gray-500'}`}>+{h.xp} XP</span>
-              <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition ${on ? 'bg-green-500 border-green-500 pop' : 'border-gray-600'}`}>{on && '✓'}</span>
+              <span className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition ${on ? 'bg-green-500 border-green-500 pop' : 'border-gray-600'}`}>{on && <Check size={16} strokeWidth={3} />}</span>
             </button>
           )
         })}
         {!habits.length && <button onClick={() => openSettings('quests')} className="w-full rounded-2xl p-4 border border-dashed border-white/20 text-gray-400 text-sm">No active quests. Tap to add some.</button>}
       </div>
       {perfect && (
-        <div className="mt-4 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 text-center font-semibold">🎉 Perfect day! Streak protected.</div>
+        <div className="mt-4 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 font-semibold flex items-center justify-center gap-2"><PartyPopper size={20} className="text-green-300" /> Perfect day! Streak protected.</div>
       )}
 
       <div className="mt-6 rounded-2xl bg-white/5 border border-white/10 p-4">
@@ -260,10 +261,10 @@ function Progress({ start, today }: { start: string; today: string }) {
     <div className="px-5 pt-6">
       <h1 className="text-2xl font-extrabold mb-5">Progress</h1>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <Stat label="Current streak" value={`🔥 ${streak}`} />
-        <Stat label="Best streak" value={`🏆 ${best}`} />
-        <Stat label="Perfect days" value={`${perfectDays}`} />
-        <Stat label="Total XP" value={`${xp}`} />
+        <Stat label="Current streak" icon={<Flame size={20} className="text-orange-400" />} value={`${streak}`} />
+        <Stat label="Best streak" icon={<Trophy size={20} className="text-yellow-300" />} value={`${best}`} />
+        <Stat label="Perfect days" icon={<CalendarCheck size={20} className="text-green-400" />} value={`${perfectDays}`} />
+        <Stat label="Total XP" icon={<Zap size={20} className="text-purple-300" />} value={`${xp}`} />
       </div>
       <h2 className="font-bold mb-3">Your {PROGRAM_DAYS}-day journey</h2>
       <div className="grid grid-cols-11 gap-1.5">
@@ -283,8 +284,8 @@ function Progress({ start, today }: { start: string; today: string }) {
     </div>
   )
 }
-const Stat = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-2xl bg-white/5 border border-white/10 p-4"><div className="text-2xl font-extrabold">{value}</div><div className="text-xs text-gray-400">{label}</div></div>
+const Stat = ({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) => (
+  <div className="rounded-2xl bg-white/5 border border-white/10 p-4"><div className="text-2xl font-extrabold flex items-center gap-2">{icon}{value}</div><div className="text-xs text-gray-400">{label}</div></div>
 )
 
 /* ---------- Journal ---------- */
@@ -299,7 +300,7 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
   const save = async () => {
     if (!text.trim() && mood < 0) return
     await db.entries.add({ date: today, createdAt: Date.now(), mood, text: text.trim() })
-    setText(''); setMood(-1); setSaved(true); toast('Entry saved ✓')
+    setText(''); setMood(-1); setSaved(true); toast('Entry saved')
     setTimeout(() => setSaved(false), 2500)
   }
   const fmtDay = (d: string) => d === today ? 'Today' : d === addDays(today, -1) ? 'Yesterday'
@@ -317,13 +318,13 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
         ))}
       </div>
       {mood >= 0 && mood <= 1 && (
-        <button onClick={goTalk} className="w-full mb-3 rounded-xl py-2.5 text-sm bg-purple-500/20 border border-purple-400/30">💬 Rough day? Talk it out with Buddy</button>
+        <button onClick={goTalk} className="w-full mb-3 rounded-xl py-2.5 text-sm bg-purple-500/20 border border-purple-400/30 flex items-center justify-center gap-2"><MessageCircle size={16} /> Rough day? Talk it out with Buddy</button>
       )}
       <textarea value={text} onChange={e => setText(e.target.value)}
         placeholder="Wins, struggles, what you learned…" rows={5}
         className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 outline-none focus:border-orange-400" />
       <button disabled={!text.trim() && mood < 0} onClick={save} className="mt-2 w-full bg-orange-500 disabled:opacity-40 rounded-xl py-3 font-bold">
-        {saved ? '✓ Saved' : 'Save entry'}
+        {saved ? <span className="inline-flex items-center gap-1"><Check size={18} /> Saved</span> : 'Save entry'}
       </button>
       <Reflect text={text} mood={mood >= 0 ? MOODS[mood] : ''} />
 
@@ -337,7 +338,7 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
               <div key={e.id} className="rounded-2xl bg-white/5 border border-white/10 p-4">
                 <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                   <span>{fmtTime(e.createdAt)} {e.mood >= 0 && <span className="text-base">{MOODS[e.mood]}</span>}</span>
-                  <button onClick={() => confirm('Delete this entry?') && db.entries.delete(e.id!)} className="px-2 text-gray-500" aria-label="Delete entry">✕</button>
+                  <button onClick={() => confirm('Delete this entry?') && db.entries.delete(e.id!)} className="p-1 text-gray-500" aria-label="Delete entry"><Trash2 size={15} /></button>
                 </div>
                 {e.text && <div className="text-sm whitespace-pre-wrap">{e.text}</div>}
               </div>
@@ -366,7 +367,7 @@ function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p
     return (
       <div className="px-5 pt-4">
         <button onClick={() => setPage('home')} className="flex items-center gap-1 text-orange-400 text-sm py-2 -ml-1 mb-1">
-          <span className="text-lg leading-none">‹</span> Settings
+          <ChevronLeft size={20} /> Settings
         </button>
         <h1 className="text-2xl font-extrabold mb-5">{titles[page]}</h1>
         {page === 'profile' && <ProfilePage />}
@@ -378,12 +379,12 @@ function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p
     )
   }
 
-  const Item = ({ icon, color, title, value, to }: { icon: string; color: string; title: string; value?: string; to: SettingsPage }) => (
+  const Item = ({ icon: Icon, color, title, value, to }: { icon: LucideIcon; color: string; title: string; value?: string; to: SettingsPage }) => (
     <button onClick={() => setPage(to)} className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:bg-white/5">
-      <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-base ${color}`}>{icon}</span>
+      <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}><Icon size={17} /></span>
       <span className="flex-1 font-medium">{title}</span>
       {value && <span className="text-sm text-gray-400 truncate max-w-[45%]">{value}</span>}
-      <span className="text-gray-600 text-lg leading-none">›</span>
+      <ChevronRight size={18} className="text-gray-600" />
     </button>
   )
   const Group = ({ label, children }: { label?: string; children: React.ReactNode }) => (
@@ -400,23 +401,23 @@ function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p
       {!aiModel && (
         <button onClick={() => setPage('ai')} className="w-full text-left mb-6 rounded-2xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400">
           <div className="rounded-2xl bg-[#141827] p-4 flex items-center gap-3">
-            <span className="text-2xl">🤖</span>
+            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center"><Sparkles size={20} /></span>
             <span className="flex-1"><span className="font-bold block">Set up your AI coach</span><span className="text-xs text-gray-400">Private, on-device, about 2 minutes</span></span>
-            <span className="text-gray-500 text-lg">›</span>
+            <ChevronRight size={18} className="text-gray-500" />
           </div>
         </button>
       )}
 
       <Group label="You">
-        <Item icon="👤" color="bg-blue-500/20" title="Profile" value={name || 'Add your name'} to="profile" />
-        <Item icon="✅" color="bg-green-500/20" title="Quests" value={`${active} active`} to="quests" />
+        <Item icon={User} color="bg-blue-500/20 text-blue-300" title="Profile" value={name || 'Add your name'} to="profile" />
+        <Item icon={ListChecks} color="bg-green-500/20 text-green-300" title="Quests" value={`${active} active`} to="quests" />
       </Group>
       <Group label="Help & motivation">
-        <Item icon="⏰" color="bg-orange-500/20" title="Reminders" value={reminder?.enabled ? fmt12(reminder.time) : 'Off'} to="reminders" />
-        <Item icon="🤖" color="bg-purple-500/20" title="AI coach" value={aiModel ? modelLabel(aiModel) : 'Off'} to="ai" />
+        <Item icon={Bell} color="bg-orange-500/20 text-orange-300" title="Reminders" value={reminder?.enabled ? fmt12(reminder.time) : 'Off'} to="reminders" />
+        <Item icon={Sparkles} color="bg-purple-500/20 text-purple-300" title="AI coach" value={aiModel ? modelLabel(aiModel) : 'Off'} to="ai" />
       </Group>
       <Group label="Your data">
-        <Item icon="💾" color="bg-gray-500/20" title="Backup & data" to="data" />
+        <Item icon={HardDrive} color="bg-gray-500/20 text-gray-300" title="Backup & data" to="data" />
       </Group>
 
       <p className="text-center text-xs text-gray-600 mt-2">Life Reset · private · works offline<br />All your data stays on this device.</p>
@@ -435,7 +436,7 @@ function ProfilePage() {
       <label className="text-sm text-gray-400 block mb-2">Your name</label>
       <input value={v} onChange={e => setVal(e.target.value)} placeholder="What should we call you?"
         className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-orange-400" />
-      <button disabled={v.trim() === name} onClick={async () => { await setMeta('name', v.trim()); setVal(null); toast('Saved ✓') }}
+      <button disabled={v.trim() === name} onClick={async () => { await setMeta('name', v.trim()); setVal(null); toast('Saved') }}
         className="w-full mt-3 bg-orange-500 disabled:opacity-40 rounded-xl py-3 font-bold">Save</button>
     </div>
   )
@@ -448,7 +449,7 @@ function QuestsPage() {
   const add = async () => {
     if (!name.trim()) return
     await db.habits.add({ name: name.trim(), emoji: emoji || '⭐', xp: 10, active: 1, order: habits.length })
-    setName(''); toast('Quest added ✓')
+    setName(''); toast('Quest added')
   }
   const upd = (h: Habit, p: Partial<Habit>) => db.habits.update(h.id!, p)
   return (
@@ -466,7 +467,7 @@ function QuestsPage() {
               <select value={h.xp} onChange={e => upd(h, { xp: +e.target.value })} className="bg-white/10 rounded-lg text-xs px-2 py-1.5" aria-label="XP">
                 {[5, 10, 20, 30].map(x => <option key={x} value={x}>{x} XP</option>)}
               </select>
-              <button onClick={() => upd(h, { active: h.active ? 0 : 1 })} className="text-xs px-3 py-1.5 rounded-lg bg-white/10">{h.active ? '⏸ Pause' : '▶ Resume'}</button>
+              <button onClick={() => upd(h, { active: h.active ? 0 : 1 })} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 inline-flex items-center gap-1">{h.active ? <><Pause size={13} /> Pause</> : <><Play size={13} /> Resume</>}</button>
               <button onClick={() => confirm(`Delete "${h.name}"? Its history is kept.`) && db.habits.delete(h.id!)} className="ml-auto text-xs px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300">Delete</button>
             </div>
           </div>
@@ -488,20 +489,20 @@ function DataPage() {
     const blob = new Blob([JSON.stringify(await exportAll(), null, 2)], { type: 'application/json' })
     const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `life-reset-${dayKey()}.json` })
     a.click(); URL.revokeObjectURL(a.href)
-    toast('Backup file saved ✓')
+    toast('Backup file saved')
   }
   const importFile = async (f?: File) => {
     if (!f) return
     if (!confirm('Restoring replaces everything currently in the app with the backup. Continue?')) return
-    try { await importAll(JSON.parse(await f.text())); toast('Backup restored ✓') } catch (e) { toast((e as Error).message) }
+    try { await importAll(JSON.parse(await f.text())); toast('Backup restored') } catch (e) { toast((e as Error).message) }
   }
   return (
     <div>
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm text-gray-300 mb-4">
-        🔒 Everything (quests, streaks, journal, chats) is stored only on this device. Nothing is uploaded. If you clear site data or lose the phone, it’s gone, so save a backup now and then.
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm text-gray-300 mb-4 flex gap-3">
+        <Lock size={18} className="text-gray-400 shrink-0 mt-0.5" /><span>Everything (quests, streaks, journal, chats) is stored only on this device. Nothing is uploaded. If you clear site data or lose the phone, it’s gone, so save a backup now and then.</span>
       </div>
-      <button onClick={exportFile} className="w-full bg-orange-500 rounded-xl py-3 font-bold mb-2">⬇️ Save backup file</button>
-      <label className="block w-full bg-white/10 rounded-xl py-3 text-center cursor-pointer mb-8">⬆️ Restore from backup
+      <button onClick={exportFile} className="w-full bg-orange-500 rounded-xl py-3 font-bold mb-2 flex items-center justify-center gap-2"><Download size={18} /> Save backup file</button>
+      <label className="w-full bg-white/10 rounded-xl py-3 cursor-pointer mb-8 flex items-center justify-center gap-2"><Upload size={18} /> Restore from backup
         <input type="file" accept="application/json" className="hidden" onChange={e => importFile(e.target.files?.[0])} />
       </label>
       <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Danger zone</div>
@@ -522,7 +523,7 @@ function InstallHint() {
     return () => window.removeEventListener('beforeinstallprompt', h)
   }, [])
   if (standalone) return null
-  if (evt) return <button onClick={() => evt.prompt().then(() => setEvt(null))} className="mt-6 w-full rounded-2xl border border-orange-400/50 bg-orange-500/10 py-3 font-semibold">📲 Install app</button>
-  if (ios) return <p className="mt-6 text-center text-sm text-gray-400">📲 To install: tap Share → “Add to Home Screen”</p>
+  if (evt) return <button onClick={() => evt.prompt().then(() => setEvt(null))} className="mt-6 w-full rounded-2xl border border-orange-400/50 bg-orange-500/10 py-3 font-semibold flex items-center justify-center gap-2"><Download size={18} /> Install app</button>
+  if (ios) return <p className="mt-6 text-sm text-gray-400 flex items-center justify-center gap-1.5 flex-wrap">To install: tap <Share size={15} /> Share → “Add to Home Screen”</p>
   return null
 }

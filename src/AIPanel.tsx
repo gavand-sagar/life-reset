@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { BookOpen, CheckCircle2, ChevronDown, Cpu, Loader2, MessageCircle, RefreshCw, SlidersHorizontal, Sparkles, Star, Sun, Wifi, X } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getMeta, setMeta } from './db'
 import {
@@ -7,7 +8,7 @@ import {
 } from './ai'
 
 const FIT: Record<Fit, [string, string]> = {
-  recommended: ['⭐ Recommended', 'bg-green-500/20 text-green-300'],
+  recommended: ['Recommended', 'bg-green-500/20 text-green-300'],
   good: ['Should run well', 'bg-white/10 text-gray-300'],
   risky: ['May be slow or crash', 'bg-yellow-500/20 text-yellow-300'],
   heavy: ['Too heavy for this device', 'bg-red-500/20 text-red-300'],
@@ -38,7 +39,7 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
 
   if (!sys || chosen === undefined) return (
     <div className="rounded-2xl bg-white/5 border border-white/10 p-6 text-center text-sm text-gray-400">
-      <div className="text-2xl mb-2 animate-pulse">🔍</div>Checking what your device can run…
+      <Loader2 size={26} className="mx-auto mb-2 animate-spin text-purple-300" />Checking what your device can run…
     </div>
   )
 
@@ -68,13 +69,13 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
   const Hero = (
     <div className="rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400 mb-4">
       <div className="rounded-3xl bg-[#141827] p-5">
-        <div className="text-3xl mb-2">🤖</div>
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-fuchsia-500 flex items-center justify-center mb-3"><Sparkles size={24} /></div>
         <h2 className="text-xl font-extrabold mb-1">Your private AI coach</h2>
         <p className="text-sm text-gray-400 mb-4">A small AI that lives on your phone. No account, no internet needed after setup, and nothing you write ever leaves your device.</p>
         <ul className="space-y-2 text-sm">
-          <li className="flex gap-2"><span>☀️</span><span><b>Daily nudge</b> on your Today screen</span></li>
-          <li className="flex gap-2"><span>💬</span><span><b>Talk it out</b> when you’re having a hard day</span></li>
-          <li className="flex gap-2"><span>📓</span><span><b>Journal reflections</b> after you write</span></li>
+          <li className="flex gap-2.5 items-center"><Sun size={17} className="text-orange-300 shrink-0" /><span><b>Daily nudge</b> on your Today screen</span></li>
+          <li className="flex gap-2.5 items-center"><MessageCircle size={17} className="text-purple-300 shrink-0" /><span><b>Talk it out</b> when you’re having a hard day</span></li>
+          <li className="flex gap-2.5 items-center"><BookOpen size={17} className="text-blue-300 shrink-0" /><span><b>Journal reflections</b> after you write</span></li>
         </ul>
       </div>
     </div>
@@ -84,11 +85,11 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
   const Device = (
     <div className="rounded-2xl bg-white/5 border border-white/10 mt-4">
       <button onClick={() => setShowDevice(!showDevice)} className="w-full flex justify-between items-center p-4 text-sm">
-        <span>🔍 Device details</span><span className="text-gray-500">{showDevice ? '▲' : '▼'}</span>
+        <span className="flex items-center gap-2"><Cpu size={16} className="text-gray-400" /> Device details</span><ChevronDown size={18} className={`text-gray-500 transition ${showDevice ? 'rotate-180' : ''}`} />
       </button>
       {showDevice && (
         <div className="px-4 pb-4 text-sm space-y-1">
-          <Row k="WebGPU" v={sys.webgpu ? '✅ Supported' : '❌ Not available'} />
+          <Row k="WebGPU" v={sys.webgpu ? 'Supported' : 'Not available'} />
           {sys.webgpu && <>
             <Row k="GPU" v={sys.gpuName} />
             <Row k="Model precision" v={sys.f16 ? '16-bit (faster)' : '32-bit (compatibility)'} />
@@ -138,7 +139,7 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
                   <span className={`text-[11px] px-2 py-0.5 rounded-full ${cls}`}>{badge}</span>
                 </div>
                 <div className="text-xs text-gray-400 mt-1">{m.note}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{cached[m.base] ? '✓ On this device' : `${fmt(m.sizeMB)} download`} · {fmt(vram)} memory</div>
+                <div className="text-xs text-gray-500 mt-0.5">{cached[m.base] ? 'On this device' : `${fmt(m.sizeMB)} download`} · {fmt(vram)} memory</div>
               </div>
               <div className="flex flex-col gap-1.5 shrink-0">
                 {active && (ready || cached[m.base])
@@ -182,18 +183,18 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
   if (chosen && installed && !failed) return (
     <div>
       <div className="rounded-3xl bg-green-500/10 border border-green-400/30 p-5 text-center mb-4">
-        <div className="text-4xl mb-2">✅</div>
+        <CheckCircle2 size={44} className="mx-auto mb-2 text-green-400" />
         <div className="font-extrabold text-lg">Your coach is ready</div>
         <p className="text-sm text-gray-400 mt-1">{modelLabel(chosen)} · runs offline on this device</p>
         {onDone && (
           <div className="grid grid-cols-2 gap-2 mt-4">
-            <button onClick={() => onDone('today')} className="rounded-xl py-3 bg-gradient-to-r from-purple-500 to-fuchsia-500 font-semibold text-sm">☀️ Get today’s nudge</button>
-            <button onClick={() => onDone('talk')} className="rounded-xl py-3 bg-white/10 font-semibold text-sm">💬 Talk</button>
+            <button onClick={() => onDone('today')} className="rounded-xl py-3 bg-gradient-to-r from-purple-500 to-fuchsia-500 font-semibold text-sm flex items-center justify-center gap-1.5"><Sun size={16} /> Today’s nudge</button>
+            <button onClick={() => onDone('talk')} className="rounded-xl py-3 bg-white/10 font-semibold text-sm flex items-center justify-center gap-1.5"><MessageCircle size={16} /> Talk</button>
           </div>
         )}
       </div>
       <button onClick={() => setShowAll(!showAll)} className="w-full flex justify-between items-center rounded-2xl bg-white/5 border border-white/10 p-4 text-sm">
-        <span>🔄 Switch model</span><span className="text-gray-500">{showAll ? '▲' : '▼'}</span>
+        <span className="flex items-center gap-2"><RefreshCw size={16} className="text-gray-400" /> Switch model</span><ChevronDown size={18} className={`text-gray-500 transition ${showAll ? 'rotate-180' : ''}`} />
       </button>
       {showAll && ModelList}
       {Device}
@@ -215,7 +216,7 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
       )}
       {rec && (
         <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-          <div className="text-xs text-green-300 font-semibold mb-1">⭐ BEST FOR THIS DEVICE</div>
+          <div className="text-xs text-green-300 font-semibold mb-1 flex items-center gap-1"><Star size={13} fill="currentColor" /> BEST FOR THIS DEVICE</div>
           <div className="flex items-baseline justify-between gap-2">
             <div className="font-bold text-lg">{rec.m.label}</div>
             <div className="text-sm text-gray-400">{cached[rec.m.base] ? 'Already downloaded' : fmt(rec.m.sizeMB)}</div>
@@ -224,11 +225,11 @@ export function AISettings({ onDone }: { onDone?: (where: 'today' | 'talk') => v
           <button onClick={() => choose(rec.m.base)} className="w-full rounded-xl py-3.5 font-bold bg-gradient-to-r from-purple-500 to-fuchsia-500">
             {failed ? 'Try again' : cached[rec.m.base] ? 'Turn on AI coach' : `Download & set up · ${fmt(rec.m.sizeMB)}`}
           </button>
-          {!cached[rec.m.base] && <p className="text-xs text-gray-500 text-center mt-2">📶 Use Wi-Fi. One-time download, then it works offline.</p>}
+          {!cached[rec.m.base] && <p className="text-xs text-gray-500 mt-2 flex items-center justify-center gap-1.5"><Wifi size={13} /> Use Wi-Fi. One-time download, then it works offline.</p>}
         </div>
       )}
       <button onClick={() => setShowAll(!showAll)} className="w-full mt-4 flex justify-between items-center rounded-2xl bg-white/5 border border-white/10 p-4 text-sm">
-        <span>⚙️ Choose a different model</span><span className="text-gray-500">{showAll ? '▲' : '▼'}</span>
+        <span className="flex items-center gap-2"><SlidersHorizontal size={16} className="text-gray-400" /> Choose a different model</span><ChevronDown size={18} className={`text-gray-500 transition ${showAll ? 'rotate-180' : ''}`} />
       </button>
       {showAll && <>
         <p className="text-xs text-gray-500 mt-3">Bigger models write better but download more and need more memory. Ratings are based on this device.</p>
@@ -281,8 +282,8 @@ export function CoachCard({ context, today, goSettings }: { context: string; tod
     return (
       <div className="relative mb-5 rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400">
         <div className="rounded-3xl bg-[#141827] p-4">
-          <button onClick={() => setMeta('coachTeaserHidden', true)} className="absolute top-3 right-4 text-gray-500 text-sm" aria-label="Hide">✕</button>
-          <div className="text-xs font-semibold text-fuchsia-300 mb-1">✨ NEW · AI COACH</div>
+          <button onClick={() => setMeta('coachTeaserHidden', true)} className="absolute top-3 right-3 p-1 text-gray-500" aria-label="Hide"><X size={16} /></button>
+          <div className="text-xs font-semibold text-fuchsia-300 mb-1 flex items-center gap-1"><Sparkles size={13} /> NEW · AI COACH</div>
           <p className="text-sm text-gray-200 mb-3">Get a personal nudge every day and a friend to talk to on hard days. Runs privately on your phone, even offline.</p>
           <button onClick={goSettings} className="text-sm px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-fuchsia-500 font-semibold">Set up AI coach</button>
         </div>
@@ -298,13 +299,13 @@ Give me one short, specific nudge for today. One or two sentences, address me di
     <div className="mb-5 rounded-3xl p-[1.5px] bg-gradient-to-br from-purple-500 via-fuchsia-500 to-orange-400 shadow-[0_0_30px_-8px_rgba(217,70,239,.6)]">
       <div className="rounded-3xl bg-[#141827] p-4">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-orange-400 flex items-center justify-center text-lg">🤖</div>
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-orange-400 flex items-center justify-center"><Sparkles size={18} /></div>
           <div className="flex-1">
             <div className="font-bold leading-tight">Your coach</div>
             <div className="text-[11px] text-gray-400">On-device · private</div>
           </div>
           <button disabled={g.busy} onClick={run} className="text-xs px-3 py-1.5 rounded-full bg-white/10 disabled:opacity-50">
-            {g.busy ? (g.ai.status === 'loading' ? `Waking ${Math.round(g.ai.progress * 100)}%` : 'Thinking…') : text ? '↻ New' : 'Get nudge'}
+            {g.busy ? (g.ai.status === 'loading' ? `Waking ${Math.round(g.ai.progress * 100)}%` : 'Thinking…') : text ? <span className="inline-flex items-center gap-1"><RefreshCw size={12} /> New</span> : 'Get nudge'}
           </button>
         </div>
         {text
@@ -326,7 +327,7 @@ export function Reflect({ text, mood }: { text: string; mood: string }) {
     <div className="mt-3">
       <button disabled={g.busy || !text.trim()} onClick={() => g.run(`My journal entry today (mood: ${mood || 'not set'}):\n"""${text.slice(0, 2000)}"""\n\nReflect back what you notice in 2-3 sentences, then ask me one thoughtful question.`)}
         className="w-full rounded-xl py-3 bg-purple-500/30 border border-purple-400/30 disabled:opacity-40 font-semibold">
-        {g.busy ? (g.ai.status === 'loading' ? `Loading model ${Math.round(g.ai.progress * 100)}%` : 'Reflecting…') : '🤖 Reflect on this entry'}
+        {g.busy ? (g.ai.status === 'loading' ? `Loading model ${Math.round(g.ai.progress * 100)}%` : 'Reflecting…') : <span className="inline-flex items-center gap-2"><Sparkles size={16} /> Reflect on this entry</span>}
       </button>
       {g.out && <div className="mt-2 rounded-2xl bg-purple-500/10 border border-purple-400/30 p-4 text-sm whitespace-pre-wrap">{g.out}</div>}
       {g.err && <p className="text-xs text-red-300 mt-1">{g.err}</p>}
