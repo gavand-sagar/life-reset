@@ -106,33 +106,62 @@ export const useAI = () => useSyncExternalStore(cb => (subs.add(cb), () => subs.
 
 const lib = () => import('@mlc-ai/web-llm')
 
-export async function isCached(id: string) {
-  try { return await (await lib()).hasModelInCache(id) } catch { return false }
+// iOS/iPadOS Safari's Cache API can store huge responses as empty bodies
+// ("Tensor-cache record range ... exceeds shard size 0"). Use IndexedDB there.
+const isAppleMobile = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+async function appConfig() {
+  const { prebuiltAppConfig } = await lib()
+  return { ...prebuiltAppConfig, cacheBackend: (isAppleMobile ? 'indexeddb' : 'cache') as 'indexeddb' | 'cache' }
 }
+
+export async function isCached(id: string) {
+  try { return await (await lib()).hasModelInCache(id, await appConfig()) } catch { return false }
+}
+
+const isCorruptCache = (msg: string) => /exceeds shard size|tensor-cache|shard/i.test(msg)
 
 export async function loadModel(id: string) {
   if (state.model === id && state.status === 'ready') return
   if (state.status === 'loading') return
   set({ status: 'loading', model: id, progress: 0, text: 'Starting…', error: undefined })
-  try {
-    navigator.storage?.persist?.().catch(() => {})
-    const { CreateWebWorkerMLCEngine } = await lib()
-    if (engine) { await engine.unload().catch(() => {}); }
-    worker?.terminate()
-    worker = new Worker(new URL('./ai.worker.ts', import.meta.url), { type: 'module' })
-    engine = await CreateWebWorkerMLCEngine(worker, id, {
-      initProgressCallback: r => set({ progress: r.progress, text: r.text }),
-    })
-    set({ status: 'ready', progress: 1, text: 'Ready' })
-  } catch (e) {
-    engine = null; worker?.terminate(); worker = null
-    set({ status: 'error', error: (e as Error).message || String(e) })
+  navigator.storage?.persist?.().catch(() => {})
+  const { CreateWebWorkerMLCEngine, deleteModelAllInfoInCache } = await lib()
+  const cfg = await appConfig()
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (engine) await engine.unload().catch(() => {})
+      worker?.terminate()
+      worker = new Worker(new URL('./ai.worker.ts', import.meta.url), { type: 'module' })
+      engine = await CreateWebWorkerMLCEngine(worker, id, {
+        appConfig: cfg,
+        initProgressCallback: r => set({ progress: r.progress, text: r.text }),
+      })
+      set({ status: 'ready', progress: 1, text: 'Ready' })
+      return
+    } catch (e) {
+      engine = null; worker?.terminate(); worker = null
+      const msg = (e as Error).message || String(e)
+      if (attempt === 0 && isCorruptCache(msg)) {
+        // A partial/empty download got cached. Wipe it (both stores) and retry once.
+        set({ text: 'Download was corrupted, retrying…', progress: 0 })
+        await deleteModelAllInfoInCache(id, cfg).catch(() => {})
+        await deleteModelAllInfoInCache(id, { ...cfg, cacheBackend: cfg.cacheBackend === 'cache' ? 'indexeddb' as const : 'cache' as const }).catch(() => {})
+        continue
+      }
+      const hint = isCorruptCache(msg) ? ' Storage may be full: free some space or pick a smaller model.' : ''
+      set({ status: 'error', error: msg + hint })
+      return
+    }
   }
 }
 
 export async function deleteModel(id: string) {
   if (state.model === id) { await engine?.unload().catch(() => {}); engine = null; worker?.terminate(); worker = null; set({ status: 'idle', model: null, progress: 0 }) }
-  await (await lib()).deleteModelAllInfoInCache(id)
+  const { deleteModelAllInfoInCache } = await lib()
+  const cfg = await appConfig()
+  await deleteModelAllInfoInCache(id, cfg).catch(() => {})
+  await deleteModelAllInfoInCache(id, { ...cfg, cacheBackend: cfg.cacheBackend === 'cache' ? 'indexeddb' as const : 'cache' as const }).catch(() => {})
 }
 
 export class StuckError extends Error {}
