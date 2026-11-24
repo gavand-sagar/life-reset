@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlarmClock, BarChart3, Bell, BookOpen, CalendarCheck, Check, ChevronLeft, ChevronRight, Download, Flame, HardDrive, ListChecks, Lock, MessageCircle, PartyPopper, Pause, Play, Settings2, Share, Sparkles, Trash2, Trophy, Upload, User, Zap, type LucideIcon } from 'lucide-react'
+import { AlarmClock, Bell, Salad, BookOpen, CalendarCheck, Check, ChevronLeft, ChevronRight, Download, Flame, HardDrive, ListChecks, Lock, MessageCircle, PartyPopper, Pause, Play, Settings2, Share, Sparkles, Trash2, Trophy, Upload, User, Zap, type LucideIcon } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   db, dayKey, addDays, diffDays, getMeta, setMeta, toggleHabit, levelFor,
@@ -7,7 +7,9 @@ import {
 } from './db'
 import { AISettings, CoachCard, Reflect, useAIModel, modelLabel } from './AIPanel'
 import { Talk } from './Talk'
-import { Confetti, Ring, Toaster, toast, RemindersSettings, fmt12 } from './ui'
+import { Confetti, Ring, Toaster, toast, RemindersSettings, DietRemindersSettings, fmt12 } from './ui'
+import { DietTab } from './Diet'
+import { getPlan, sortedMeals, toMin, nowMin, DEFAULT_DIET_REMINDERS, type DietReminders } from './dietData'
 import { DEFAULT_REMINDER, startReminders, type Reminder } from './reminders'
 
 const GOALS: Record<string, { label: string; emoji: string; habits: [string, string][] }> = {
@@ -28,7 +30,7 @@ const QUOTES = [
 ]
 const MOODS = ['😞', '😕', '😐', '🙂', '😄']
 
-type Tab = 'today' | 'progress' | 'journal' | 'talk' | 'settings'
+type Tab = 'today' | 'diet' | 'progress' | 'journal' | 'talk' | 'settings'
 
 export default function App() {
   const start = useLiveQuery(() => getMeta<string | null>('startDate', null), [], undefined)
@@ -36,22 +38,28 @@ export default function App() {
   const [page, setPage] = useState<SettingsPage>('home')
   const openSettings = (p: SettingsPage) => { setPage(p); setTab('settings') }
   const today = useToday()
-  useEffect(() => { startReminders() }, [])
+  useEffect(() => {
+    startReminders()
+    const onRem = (e: Event) => toast((e as CustomEvent<string>).detail)
+    window.addEventListener('lr-reminder', onRem)
+    return () => window.removeEventListener('lr-reminder', onRem)
+  }, [])
   useEffect(() => { window.scrollTo(0, 0) }, [tab, page])
   if (start === undefined) return null
   if (!start) return <Onboarding />
   return (
     <div className="mx-auto max-w-md min-h-dvh pb-24">
-      {tab === 'today' && <Today start={start} today={today} openSettings={openSettings} />}
-      {tab === 'progress' && <Progress start={start} today={today} />}
+      {tab === 'today' && <Today start={start} today={today} openSettings={openSettings} go={setTab} />}
+      {tab === 'diet' && <DietTab today={today} openReminders={() => openSettings('reminders')} />}
+      {tab === 'progress' && <Progress start={start} today={today} onBack={() => setTab('today')} />}
       {tab === 'journal' && <JournalView today={today} goTalk={() => setTab('talk')} />}
       {tab === 'talk' && <Talk goSettings={() => openSettings('ai')} />}
-      {tab === 'settings' && <Settings page={page} setPage={setPage} onAIDone={w => setTab(w)} />}
+      {tab === 'settings' && <Settings page={page} setPage={setPage} onAIDone={w => setTab(w)} goDiet={() => setTab('diet')} />}
       <Toaster />
       <nav className="fixed bottom-0 inset-x-0 bg-[#0b0f19]/95 backdrop-blur border-t border-white/10" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="mx-auto max-w-md grid grid-cols-5">
-          {([['today', ListChecks, 'Today'], ['progress', BarChart3, 'Progress'], ['journal', BookOpen, 'Journal'], ['talk', MessageCircle, 'Talk'], ['settings', Settings2, 'Settings']] as const).map(([k, Icon, l]) => (
-            <button key={k} onClick={() => { if (k === 'settings') setPage('home'); setTab(k) }} className={`py-3 flex flex-col items-center text-xs ${tab === k ? 'text-orange-400' : 'text-gray-500'}`}>
+          {([['today', ListChecks, 'Today'], ['diet', Salad, 'Diet'], ['journal', BookOpen, 'Journal'], ['talk', MessageCircle, 'Talk'], ['settings', Settings2, 'Settings']] as const).map(([k, Icon, l]) => (
+            <button key={k} onClick={() => { if (k === 'settings') setPage('home'); setTab(k) }} className={`py-3 flex flex-col items-center text-xs ${tab === k || (k === 'today' && tab === 'progress') ? 'text-orange-400' : 'text-gray-500'}`}>
               <Icon size={22} strokeWidth={tab === k ? 2.4 : 1.8} className="mb-1" />{l}
             </button>
           ))}
@@ -163,7 +171,7 @@ const greeting = () => {
   return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
-function Today({ start, today, openSettings }: { start: string; today: string; openSettings: (p: SettingsPage) => void }) {
+function Today({ start, today, openSettings, go }: { start: string; today: string; openSettings: (p: SettingsPage) => void; go: (t: Tab) => void }) {
   const { habits, byDate, xp, streak, day } = useStats(start, today)
   const name = useLiveQuery(() => getMeta('name', ''), []) ?? ''
   const reminder = useLiveQuery(() => getMeta<Reminder>('reminder', DEFAULT_REMINDER), [])
@@ -199,13 +207,17 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
           <h1 className="text-2xl font-extrabold">Day {day}{day <= PROGRAM_DAYS && <span className="text-gray-500 font-semibold"> / {PROGRAM_DAYS}</span>}</h1>
           <div className="text-sm text-orange-400 font-semibold mt-0.5 flex items-center gap-1"><Flame size={15} /> {streak} day streak</div>
         </div>
-        <Ring value={habits.length ? doneCount / habits.length : 0} size={68}>
-          {perfect ? <Check size={26} strokeWidth={3} className="text-green-400" /> : `${doneCount}/${habits.length}`}
-        </Ring>
+        <button onClick={() => go('progress')} aria-label="View progress">
+          <Ring value={habits.length ? doneCount / habits.length : 0} size={68}>
+            {perfect ? <Check size={26} strokeWidth={3} className="text-green-400" /> : `${doneCount}/${habits.length}`}
+          </Ring>
+        </button>
       </div>
 
       <CoachCard today={today} goSettings={() => openSettings('ai')}
         context={`Day ${day} of a 66-day habit program. Current streak: ${streak} days. Level ${lvl}. Time of day: ${greeting().toLowerCase()}. Quests: ${habits.map(h => `${h.name} (${done.has(h.id!) ? 'done' : 'not done yet'})`).join(', ')}.`} />
+
+      <NextMeal today={today} go={go} />
 
       {showNudgeBanner && (
         <div className="mb-4 rounded-2xl bg-orange-500/15 border border-orange-400/40 p-3 text-sm flex items-center gap-2">
@@ -239,7 +251,7 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
         <div className="mt-4 rounded-2xl bg-green-500/15 border border-green-500/40 p-4 font-semibold flex items-center justify-center gap-2"><PartyPopper size={20} className="text-green-300" /> Perfect day! Streak protected.</div>
       )}
 
-      <div className="mt-6 rounded-2xl bg-white/5 border border-white/10 p-4">
+      <button onClick={() => go('progress')} className="w-full text-left mt-6 rounded-2xl bg-white/5 border border-white/10 p-4">
         <div className="flex justify-between items-baseline mb-2">
           <span className="font-bold">Level {lvl}</span><span className="text-xs text-gray-400">{xp} XP · {toNext} to next</span>
         </div>
@@ -247,18 +259,47 @@ function Today({ start, today, openSettings }: { start: string; today: string; o
         <div className="flex justify-between text-xs text-gray-500 mt-3 mb-1"><span>66-day journey</span><span>{Math.round(pct * 100)}%</span></div>
         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-orange-500" style={{ width: `${pct * 100}%` }} /></div>
         <p className="text-sm text-gray-400 mt-3 italic">“{quote}”</p>
-      </div>
+        <div className="text-sm text-orange-300 mt-3 flex items-center gap-1">See progress <ChevronRight size={16} /></div>
+      </button>
       <InstallHint />
     </div>
   )
 }
 
+function NextMeal({ today, go }: { today: string; go: (t: Tab) => void }) {
+  const plan = useLiveQuery(() => getPlan(), [])
+  const day = useLiveQuery(() => db.dietDays.get(today), [today])
+  if (!plan) return null
+  const timed = sortedMeals(plan).filter(m => m.time)
+  const status = day?.meals ?? {}
+  const now = nowMin()
+  const pending = timed.filter(m => !status[m.id])
+  const m = [...pending].reverse().find(x => toMin(x.time) <= now) ?? pending.find(x => toMin(x.time) > now)
+  const done = timed.filter(x => status[x.id] === 'done').length
+  return (
+    <button onClick={() => go('diet')} className="w-full text-left mb-4 rounded-2xl bg-green-500/10 border border-green-500/30 p-3.5 flex items-center gap-3">
+      <span className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center shrink-0"><Salad size={20} className="text-green-400" /></span>
+      <span className="flex-1 min-w-0">
+        {m ? <>
+          <span className="block text-xs text-green-300 font-semibold">{toMin(m.time) <= now ? 'NOW' : 'NEXT'} · {fmt12(m.time)} · {m.title}</span>
+          <span className="block text-sm text-gray-200 truncate">{m.items || 'Tap to log it'}</span>
+        </> : <>
+          <span className="block text-xs text-green-300 font-semibold">DIET</span>
+          <span className="block text-sm text-gray-200">All meals logged today · {done}/{timed.length} on plan</span>
+        </>}
+      </span>
+      <ChevronRight size={18} className="text-gray-500 shrink-0" />
+    </button>
+  )
+}
+
 /* ---------- Progress ---------- */
-function Progress({ start, today }: { start: string; today: string }) {
+function Progress({ start, today, onBack }: { start: string; today: string; onBack: () => void }) {
   const { ratio, streak, best, xp, perfectDays, day } = useStats(start, today)
   const total = Math.max(PROGRAM_DAYS, day)
   return (
     <div className="px-5 pt-6">
+      <button onClick={onBack} className="flex items-center gap-1 text-orange-400 text-sm py-2 -ml-1 -mt-2 mb-1"><ChevronLeft size={20} /> Today</button>
       <h1 className="text-2xl font-extrabold mb-5">Progress</h1>
       <div className="grid grid-cols-2 gap-3 mb-6">
         <Stat label="Current streak" icon={<Flame size={20} className="text-orange-400" />} value={`${streak}`} />
@@ -353,7 +394,8 @@ function JournalView({ today, goTalk }: { today: string; goTalk: () => void }) {
 /* ---------- Settings ---------- */
 type SettingsPage = 'home' | 'profile' | 'quests' | 'reminders' | 'ai' | 'data'
 
-function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p: SettingsPage) => void; onAIDone: (where: 'today' | 'talk') => void }) {
+function Settings({ page, setPage, onAIDone, goDiet }: { page: SettingsPage; setPage: (p: SettingsPage) => void; onAIDone: (where: 'today' | 'talk') => void; goDiet: () => void }) {
+  const dietRem = useLiveQuery(() => getMeta<DietReminders>('dietReminders', DEFAULT_DIET_REMINDERS), [])
   const name = useLiveQuery(() => getMeta('name', ''), []) ?? ''
   const habits = useLiveQuery(() => db.habits.toArray(), []) ?? []
   const reminder = useLiveQuery(() => getMeta<Reminder>('reminder', DEFAULT_REMINDER), [])
@@ -372,7 +414,12 @@ function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p
         <h1 className="text-2xl font-extrabold mb-5">{titles[page]}</h1>
         {page === 'profile' && <ProfilePage />}
         {page === 'quests' && <QuestsPage />}
-        {page === 'reminders' && <RemindersSettings />}
+        {page === 'reminders' && <>
+          <div className="text-xs uppercase tracking-wide text-gray-500 mb-2 px-1">Daily quests</div>
+          <RemindersSettings />
+          <div className="text-xs uppercase tracking-wide text-gray-500 mt-6 mb-2 px-1">Diet</div>
+          <DietRemindersSettings goDiet={goDiet} />
+        </>}
         {page === 'ai' && <AISettings onDone={onAIDone} />}
         {page === 'data' && <DataPage />}
       </div>
@@ -413,7 +460,7 @@ function Settings({ page, setPage, onAIDone }: { page: SettingsPage; setPage: (p
         <Item icon={ListChecks} color="bg-green-500/20 text-green-300" title="Quests" value={`${active} active`} to="quests" />
       </Group>
       <Group label="Help & motivation">
-        <Item icon={Bell} color="bg-orange-500/20 text-orange-300" title="Reminders" value={reminder?.enabled ? fmt12(reminder.time) : 'Off'} to="reminders" />
+        <Item icon={Bell} color="bg-orange-500/20 text-orange-300" title="Reminders" value={[reminder?.enabled && fmt12(reminder.time), (dietRem?.meals || dietRem?.water || dietRem?.weighIn) && 'Diet'].filter(Boolean).join(' · ') || 'Off'} to="reminders" />
         <Item icon={Sparkles} color="bg-purple-500/20 text-purple-300" title="AI coach" value={aiModel ? modelLabel(aiModel) : 'Off'} to="ai" />
       </Group>
       <Group label="Your data">

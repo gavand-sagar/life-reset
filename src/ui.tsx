@@ -1,10 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { BellRing, CalendarPlus } from 'lucide-react'
+import { BellRing, CalendarPlus, Droplets, Scale, Utensils } from 'lucide-react'
+import { getPlan, sortedMeals, DEFAULT_DIET_REMINDERS, type DietReminders } from './dietData'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { getMeta } from './db'
 import {
   DEFAULT_REMINDER, saveReminder, requestPermission, showTest, notifySupported,
-  isStandalone, isIOS, downloadCalendarReminder, type Reminder,
+  isStandalone, isIOS, downloadCalendarReminder, saveDietReminders, type Reminder,
 } from './reminders'
 
 /* ---------- Toasts ---------- */
@@ -20,7 +21,7 @@ export function Toaster() {
   const t = useSyncExternalStore(cb => (toastSubs.add(cb), () => toastSubs.delete(cb)), () => toastMsg)
   if (!t) return null
   return (
-    <div className="fixed left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-full bg-white text-gray-900 text-sm font-semibold shadow-lg toast-in whitespace-nowrap"
+    <div className="fixed left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-white text-gray-900 text-sm font-semibold shadow-lg toast-in w-max max-w-[90vw] text-center"
       style={{ bottom: 'calc(84px + env(safe-area-inset-bottom))' }} role="status">{t.text}</div>
   )
 }
@@ -117,4 +118,72 @@ export function RemindersSettings() {
 export const fmt12 = (t: string) => {
   const [h, m] = t.split(':').map(Number)
   return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+export function DietRemindersSettings({ goDiet }: { goDiet?: () => void }) {
+  const r = useLiveQuery(() => getMeta<DietReminders>('dietReminders', DEFAULT_DIET_REMINDERS), [])
+  const plan = useLiveQuery(() => getPlan(), [])
+  if (!r || plan === undefined) return null
+  if (!plan) return (
+    <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-sm text-gray-400">
+      Start a diet plan first, then you can get reminders at meal times, to drink water and to weigh in.
+      {goDiet && <button onClick={goDiet} className="block mt-3 text-green-400 font-semibold">Set up a diet plan →</button>}
+    </div>
+  )
+  const update = async (patch: Partial<DietReminders>) => {
+    const next = { ...r, ...patch }
+    const turningOn = (patch.meals || patch.water || patch.weighIn) === true
+    if (turningOn && notifySupported() && Notification.permission === 'default') await requestPermission()
+    await saveDietReminders(next)
+  }
+  const times = sortedMeals(plan).filter(m => m.time).map(m => fmt12(m.time))
+  const Toggle = ({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) =>
+    <input type="checkbox" checked={on} onChange={e => onChange(e.target.checked)} className="w-5 h-5 accent-green-500 shrink-0" />
+  const sel = 'bg-white/10 rounded-lg px-2 py-1.5 text-sm [color-scheme:dark]'
+  return (
+    <div className="rounded-2xl bg-white/5 border border-white/10 divide-y divide-white/5">
+      <div className="p-4">
+        <label className="flex items-center gap-3">
+          <Utensils size={18} className="text-green-400 shrink-0" />
+          <span className="flex-1"><span className="font-semibold block">Meal times</span><span className="text-xs text-gray-400">{times.length ? times.join(' · ') : 'No timed meals in your plan'}</span></span>
+          <Toggle on={r.meals} onChange={v => update({ meals: v })} />
+        </label>
+        <p className="text-[11px] text-gray-500 mt-2 pl-7">Skipped if you’ve already logged that meal.</p>
+      </div>
+      <div className="p-4">
+        <label className="flex items-center gap-3">
+          <Droplets size={18} className="text-sky-400 shrink-0" />
+          <span className="flex-1"><span className="font-semibold block">Drink water</span><span className="text-xs text-gray-400">Only when you’re behind your {plan.waterMl / 1000} L goal</span></span>
+          <Toggle on={r.water} onChange={v => update({ water: v })} />
+        </label>
+        {r.water && (
+          <div className="flex items-center gap-2 mt-3 pl-7 text-sm text-gray-300 flex-wrap">
+            Every
+            <select value={r.waterEveryH} onChange={e => update({ waterEveryH: +e.target.value })} className={sel}>
+              {[1, 2, 3].map(h => <option key={h} value={h}>{h} h</option>)}
+            </select>
+            from <input type="time" value={r.waterFrom} onChange={e => e.target.value && update({ waterFrom: e.target.value })} className={sel} />
+            to <input type="time" value={r.waterTo} onChange={e => e.target.value && update({ waterTo: e.target.value })} className={sel} />
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <label className="flex items-center gap-3">
+          <Scale size={18} className="text-purple-300 shrink-0" />
+          <span className="flex-1"><span className="font-semibold block">Weekly weigh-in</span><span className="text-xs text-gray-400">Same day and time each week</span></span>
+          <Toggle on={r.weighIn} onChange={v => update({ weighIn: v })} />
+        </label>
+        {r.weighIn && (
+          <div className="flex items-center gap-2 mt-3 pl-7 text-sm text-gray-300">
+            <select value={r.weighDay} onChange={e => update({ weighDay: +e.target.value })} className={sel}>
+              {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+            </select>
+            at <input type="time" value={r.weighTime} onChange={e => e.target.value && update({ weighTime: e.target.value })} className={sel} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }

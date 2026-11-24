@@ -5,6 +5,7 @@ export interface Log { key: string; date: string; habitId: number; xp: number }
 export interface Journal { date: string; mood: number; text: string; updatedAt: number }
 export interface Entry { id?: number; date: string; createdAt: number; mood: number; text: string }
 export interface ChatMsg { id?: number; role: 'user' | 'assistant'; content: string; createdAt: number }
+import type { DietDay, Weight } from './dietData'
 export interface Meta { key: string; value: unknown }
 
 export const db = new Dexie('life-reset') as Dexie & {
@@ -14,6 +15,8 @@ export const db = new Dexie('life-reset') as Dexie & {
   meta: EntityTable<Meta, 'key'>
   entries: EntityTable<Entry, 'id'>
   chat: EntityTable<ChatMsg, 'id'>
+  dietDays: EntityTable<DietDay, 'date'>
+  weights: EntityTable<Weight, 'date'>
 }
 
 db.version(1).stores({
@@ -31,6 +34,10 @@ db.version(2).stores({
   await tx.table('entries').bulkAdd(old.filter(j => j.text || j.mood >= 0).map(j => ({
     date: j.date, createdAt: j.updatedAt ?? Date.now(), mood: j.mood ?? -1, text: j.text ?? '',
   })))
+})
+db.version(3).stores({
+  dietDays: 'date',
+  weights: 'date',
 })
 
 export const PROGRAM_DAYS = 66
@@ -72,12 +79,16 @@ export async function exportAll() {
   const [habits, logs, journal, meta, entries, chat] = await Promise.all([
     db.habits.toArray(), db.logs.toArray(), db.journal.toArray(), db.meta.toArray(), db.entries.toArray(), db.chat.toArray(),
   ])
-  return { app: 'life-reset', version: 2, exportedAt: new Date().toISOString(), habits, logs, journal, meta, entries, chat }
+  const [dietDays, weights] = await Promise.all([db.dietDays.toArray(), db.weights.toArray()])
+  return { app: 'life-reset', version: 3, exportedAt: new Date().toISOString(), habits, logs, journal, meta, entries, chat, dietDays, weights }
 }
 
 export async function importAll(data: Awaited<ReturnType<typeof exportAll>>) {
   if (data?.app !== 'life-reset') throw new Error('Not a Life Reset backup file')
-  await db.transaction('rw', [db.habits, db.logs, db.journal, db.meta, db.entries, db.chat], async () => {
+  await db.transaction('rw', [db.habits, db.logs, db.journal, db.meta, db.entries, db.chat, db.dietDays, db.weights], async () => {
+    await Promise.all([db.dietDays.clear(), db.weights.clear()])
+    if (data.dietDays) await db.dietDays.bulkPut(data.dietDays)
+    if (data.weights) await db.weights.bulkPut(data.weights)
     await Promise.all([db.habits.clear(), db.logs.clear(), db.journal.clear(), db.meta.clear(), db.entries.clear(), db.chat.clear()])
     if (data.entries) await db.entries.bulkPut(data.entries)
     else await db.entries.bulkAdd((data.journal ?? []).filter(j => j.text || j.mood >= 0).map(j => ({ date: j.date, createdAt: j.updatedAt, mood: j.mood, text: j.text })))
