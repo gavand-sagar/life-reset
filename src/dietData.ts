@@ -35,13 +35,13 @@ const uid = () => Math.random().toString(36).slice(2, 9)
 /** Generic template (single person). Users edit it to fit themselves. */
 export function ketoTemplate(): DietPlan {
   return {
-    name: 'Keto: high protein, low carb',
+    name: 'Keto 1,400 kcal: high protein, low carb',
     startDate: dayKey(),
     weeks: 4,
     waterMl: 3000,
-    targets: { kcal: 1700, protein: 105, netCarbs: 25 },
+    targets: { kcal: 1400, protein: 90, netCarbs: 20 },
     meals: [
-      { id: uid(), time: '07:00', title: 'Wake up', items: 'Lemon water with a pinch of salt + 10 almonds' },
+      { id: uid(), time: '07:00', title: 'Wake up', items: 'Lemon water with a pinch of salt + 6 almonds' },
       { id: uid(), time: '09:00', title: 'Breakfast', items: '3 boiled eggs or 100 g paneer bhurji + 1 cucumber' },
       { id: uid(), time: '13:00', title: 'Lunch', items: '150 g chicken / fish / paneer / tofu + 100–150 g green veg or low-carb salad' },
       { id: uid(), time: '16:00', title: 'Snack', items: '80 g plain, unsweetened Greek yogurt' },
@@ -49,7 +49,7 @@ export function ketoTemplate(): DietPlan {
       { id: uid(), time: '', title: 'Anytime', items: '1 tsp white til (sesame) + a few pumpkin seeds' },
     ],
     rules: [
-      'Cooking fat per day: about 30 g ghee + 30 g olive oil. Use a little less on paneer days.',
+      'Cooking fat per day: about 20 g ghee + 20 g olive oil. Use a little less on paneer days.',
       'Low-carb salad: cucumber, cabbage, capsicum, lettuce, a little tomato. Skip carrot and beetroot, or just a few slices.',
       'Soya chunks at most 2–3 times a week (about 50 g dry). Prefer tofu or paneer.',
       'Greek yogurt must be plain and unsweetened.',
